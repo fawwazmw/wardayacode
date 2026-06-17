@@ -1,8 +1,10 @@
+import type { CoreMessage } from 'ai';
 import { Message, CompactedContext } from '../types.js';
 
 const MAX_TOOL_RESULT_LENGTH = 2000;
 const OLD_MESSAGE_THRESHOLD = 20;
 const TOOL_RESULT_SUMMARY_LENGTH = 500;
+const COMPACTION_THRESHOLD = 0.7;
 
 export class ContextManager {
   private transcript: Message[] = [];
@@ -126,6 +128,25 @@ export class ContextManager {
 
   clear(): void {
     this.transcript = [];
+  }
+
+  shouldCompact(): boolean {
+    return this.estimateTokens(this.transcript) > this.maxContextTokens * COMPACTION_THRESHOLD;
+  }
+
+  toCoreMessages(): CoreMessage[] {
+    return this.transcript
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+  }
+
+  addCoreMessage(role: 'user' | 'assistant', content: string): void {
+    this.addMessage({
+      id: crypto.randomUUID(),
+      role,
+      content,
+      timestamp: Date.now(),
+    });
   }
 
   getWorkingDirectory(): string {

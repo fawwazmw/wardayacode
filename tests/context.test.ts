@@ -78,4 +78,45 @@ describe('ContextManager', () => {
     const result = await ctx.compact();
     expect(result.tokenCount).toBe(164); // 400 chars * 0.4 + 4 per-message overhead
   });
+
+  it('shouldCompact returns false when under threshold', () => {
+    const ctx = new ContextManager('/tmp', 100_000);
+    ctx.addMessage(makeMessage('user', 'hello'));
+    expect(ctx.shouldCompact()).toBe(false);
+  });
+
+  it('shouldCompact returns true when over 70% of budget', () => {
+    const ctx = new ContextManager('/tmp', 100);
+    // Each char ~0.4 tokens + 4 overhead; 240 chars * 0.4 + 4 = 100 tokens = 100% budget
+    ctx.addMessage(makeMessage('user', 'a'.repeat(240)));
+    expect(ctx.shouldCompact()).toBe(true);
+  });
+
+  it('addCoreMessage adds user and assistant messages', () => {
+    const ctx = new ContextManager();
+    ctx.addCoreMessage('user', 'hello');
+    ctx.addCoreMessage('assistant', 'world');
+    expect(ctx.getMessageCount()).toBe(2);
+  });
+
+  it('toCoreMessages filters to user/assistant only', () => {
+    const ctx = new ContextManager();
+    ctx.addMessage({ id: '1', role: 'system', content: 'sys', timestamp: Date.now() });
+    ctx.addCoreMessage('user', 'hello');
+    ctx.addCoreMessage('assistant', 'hi');
+
+    const core = ctx.toCoreMessages();
+    expect(core).toHaveLength(2);
+    expect(core[0]!.role).toBe('user');
+    expect(core[1]!.role).toBe('assistant');
+  });
+
+  it('compact after clear starts fresh', async () => {
+    const ctx = new ContextManager('/tmp', 100);
+    ctx.addMessage(makeMessage('user', 'a'.repeat(240)));
+    const compacted = await ctx.compact();
+    ctx.clear();
+    for (const m of compacted.messages) ctx.addMessage(m);
+    expect(ctx.shouldCompact()).toBe(false); // compaction should have reduced tokens
+  });
 });
