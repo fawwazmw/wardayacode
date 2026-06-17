@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import treeKill from 'tree-kill';
 import { Tool } from './Tool.js';
 import { ToolDefinition, ToolResult } from '../types.js';
+import { logger } from '../utils/logger.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
@@ -67,7 +68,7 @@ export class BashTool extends Tool {
 
     const destructiveMatch = isDestructive(command);
     if (destructiveMatch) {
-      process.stderr.write(`[wardayacode] WARNING: Potentially destructive command blocked: ${command}\n`);
+      logger.warn('destructive command blocked', { command });
       return {
         success: false,
         error: `Blocked: command matches a destructive pattern. If you intend to run this, adjust the permission mode or run it manually.`,
@@ -75,7 +76,7 @@ export class BashTool extends Tool {
       };
     }
 
-    process.stderr.write(`[wardayacode] bash: ${command}\n`);
+    logger.debug('bash exec', { command, workdir, timeout });
 
     return new Promise<ToolResult>((resolvePromise) => {
       let stdout = '';
