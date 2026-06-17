@@ -2,8 +2,16 @@ import { readdir, stat } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { Tool } from './Tool.js';
 import { ToolDefinition, ToolResult } from '../types.js';
+import { assertPathContained } from './pathSafety.js';
 
 export class ListFilesTool extends Tool {
+  private readonly rootDir: string;
+
+  constructor(rootDir: string = process.cwd()) {
+    super();
+    this.rootDir = rootDir;
+  }
+
   definition: ToolDefinition = {
     name: 'list_files',
     description:
@@ -27,6 +35,7 @@ export class ListFilesTool extends Tool {
     const dirPath = input.path ? resolve(input.path as string) : process.cwd();
 
     try {
+      assertPathContained(dirPath, this.rootDir);
       const dirStat = await stat(dirPath);
       if (!dirStat.isDirectory()) {
         return {

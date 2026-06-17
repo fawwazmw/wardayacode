@@ -3,6 +3,7 @@ import { resolve, relative } from 'node:path';
 import { glob } from 'glob';
 import { Tool } from './Tool.js';
 import { ToolDefinition, ToolResult } from '../types.js';
+import { assertPathContained } from './pathSafety.js';
 
 interface GrepMatch {
   file: string;
@@ -11,6 +12,13 @@ interface GrepMatch {
 }
 
 export class GrepTool extends Tool {
+  private readonly rootDir: string;
+
+  constructor(rootDir: string = process.cwd()) {
+    super();
+    this.rootDir = rootDir;
+  }
+
   definition: ToolDefinition = {
     name: 'grep',
     description:
@@ -47,6 +55,12 @@ export class GrepTool extends Tool {
     const pattern = input.pattern as string;
     const searchPath = input.path ? resolve(input.path as string) : process.cwd();
     const include = (input.include as string) || '**/*';
+
+    try {
+      assertPathContained(searchPath, this.rootDir);
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
+    }
 
     let regex: RegExp;
     try {

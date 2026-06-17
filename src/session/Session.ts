@@ -25,7 +25,14 @@ export class Session {
       const content = await fs.readFile(this.transcriptPath, 'utf-8');
       const lines = content.split('\n').filter(line => line.trim());
       for (const line of lines) {
-        this.messages.push(JSON.parse(line));
+        try {
+          const msg = JSON.parse(line) as SessionMessage;
+          if (msg.id && msg.role && msg.content !== undefined) {
+            this.messages.push(msg);
+          }
+        } catch {
+          // skip corrupt line without aborting the whole session
+        }
       }
     } catch (error) {
       // New session - file doesn't exist yet

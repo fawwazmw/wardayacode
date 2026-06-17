@@ -4,9 +4,16 @@ import { Tool } from './Tool.js';
 import { ToolDefinition, ToolResult } from '../types.js';
 import { UndoManager } from './UndoManager.js';
 import { generateDiff } from './DiffView.js';
+import { assertPathContained } from './pathSafety.js';
 
 export class EditFileTool extends Tool {
   private undoManager?: UndoManager;
+  private readonly rootDir: string;
+
+  constructor(rootDir: string = process.cwd()) {
+    super();
+    this.rootDir = rootDir;
+  }
 
   definition: ToolDefinition = {
     name: 'edit_file',
@@ -54,6 +61,7 @@ export class EditFileTool extends Tool {
     const replaceAll = (input.replaceAll as boolean) || false;
 
     try {
+      assertPathContained(filePath, this.rootDir);
       const content = await readFile(filePath, 'utf-8');
       const occurrences = this.countOccurrences(content, oldString);
 
@@ -84,6 +92,10 @@ export class EditFileTool extends Tool {
       }
 
       await writeFile(filePath, newContent, 'utf-8');
+
+      if (this.undoManager) {
+        await this.undoManager.recordNewContent(filePath);
+      }
 
       const diff = generateDiff(content, newContent, filePath);
 

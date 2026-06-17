@@ -2,8 +2,16 @@ import { glob } from 'glob';
 import { resolve } from 'node:path';
 import { Tool } from './Tool.js';
 import { ToolDefinition, ToolResult } from '../types.js';
+import { assertPathContained } from './pathSafety.js';
 
 export class GlobTool extends Tool {
+  private readonly rootDir: string;
+
+  constructor(rootDir: string = process.cwd()) {
+    super();
+    this.rootDir = rootDir;
+  }
+
   definition: ToolDefinition = {
     name: 'glob',
     description:
@@ -36,6 +44,7 @@ export class GlobTool extends Tool {
     const searchPath = input.path ? resolve(input.path as string) : process.cwd();
 
     try {
+      assertPathContained(searchPath, this.rootDir);
       const matches = await glob(pattern, {
         cwd: searchPath,
         absolute: true,

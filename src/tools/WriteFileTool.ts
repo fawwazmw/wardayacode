@@ -3,9 +3,16 @@ import { resolve, dirname } from 'node:path';
 import { Tool } from './Tool.js';
 import { ToolDefinition, ToolResult } from '../types.js';
 import { UndoManager } from './UndoManager.js';
+import { assertPathContained } from './pathSafety.js';
 
 export class WriteFileTool extends Tool {
   private undoManager?: UndoManager;
+  private readonly rootDir: string;
+
+  constructor(rootDir: string = process.cwd()) {
+    super();
+    this.rootDir = rootDir;
+  }
 
   definition: ToolDefinition = {
     name: 'write_file',
@@ -43,12 +50,18 @@ export class WriteFileTool extends Tool {
     const content = input.content as string;
 
     try {
+      assertPathContained(filePath, this.rootDir);
+
       if (this.undoManager) {
         await this.undoManager.saveSnapshot(filePath, 'write_file');
       }
 
       await mkdir(dirname(filePath), { recursive: true });
       await writeFile(filePath, content, 'utf-8');
+
+      if (this.undoManager) {
+        await this.undoManager.recordNewContent(filePath);
+      }
 
       const lineCount = content.split('\n').length;
 

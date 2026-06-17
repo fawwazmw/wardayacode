@@ -39,6 +39,17 @@ export class UndoManager {
     }
   }
 
+  async recordNewContent(filePath: string): Promise<void> {
+    const entry = this.stack[this.stack.length - 1];
+    if (entry && entry.filePath === filePath && entry.newContent === '') {
+      try {
+        entry.newContent = await readFile(filePath, 'utf-8');
+      } catch {
+        // file may have been deleted — leave newContent empty
+      }
+    }
+  }
+
   async undo(): Promise<{ filePath: string; toolName: string } | null> {
     const entry = this.stack.pop();
     if (!entry) return null;

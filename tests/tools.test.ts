@@ -44,7 +44,7 @@ describe('ToolRegistry', () => {
 });
 
 describe('ReadFileTool', () => {
-  const tool = new ReadFileTool();
+  const tool = new ReadFileTool(TEST_DIR);
 
   it('reads a file with line numbers', async () => {
     const filePath = join(TEST_DIR, 'test.txt');
@@ -82,7 +82,7 @@ describe('ReadFileTool', () => {
 });
 
 describe('WriteFileTool', () => {
-  const tool = new WriteFileTool();
+  const tool = new WriteFileTool(TEST_DIR);
 
   it('writes a new file', async () => {
     const filePath = join(TEST_DIR, 'output.txt');
@@ -99,7 +99,7 @@ describe('WriteFileTool', () => {
 });
 
 describe('EditFileTool', () => {
-  const tool = new EditFileTool();
+  const tool = new EditFileTool(TEST_DIR);
 
   it('replaces a unique string', async () => {
     const filePath = join(TEST_DIR, 'edit.txt');
@@ -154,7 +154,7 @@ describe('EditFileTool', () => {
 });
 
 describe('GlobTool', () => {
-  const tool = new GlobTool();
+  const tool = new GlobTool(TEST_DIR);
 
   it('finds files by pattern', async () => {
     await writeFile(join(TEST_DIR, 'a.ts'), '');
@@ -176,7 +176,7 @@ describe('GlobTool', () => {
 });
 
 describe('GrepTool', () => {
-  const tool = new GrepTool();
+  const tool = new GrepTool(TEST_DIR);
 
   it('finds matching lines', async () => {
     await writeFile(join(TEST_DIR, 'search.ts'), 'const foo = 1;\nconst bar = 2;\nconst foobar = 3;\n');
@@ -203,7 +203,7 @@ describe('GrepTool', () => {
 });
 
 describe('ListFilesTool', () => {
-  const tool = new ListFilesTool();
+  const tool = new ListFilesTool(TEST_DIR);
 
   it('lists directory contents', async () => {
     await writeFile(join(TEST_DIR, 'file1.txt'), '');

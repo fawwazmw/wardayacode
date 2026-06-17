@@ -5,6 +5,27 @@ import { Tool } from './Tool.js';
 import { ToolDefinition, ToolResult } from '../types.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
+const MAX_TIMEOUT_MS = 600_000;
+
+const DESTRUCTIVE_PATTERNS = [
+  /\brm\s+-[a-zA-Z]*r[a-zA-Z]*f\b/,  // rm -rf variants
+  /\brm\s+-[a-zA-Z]*f[a-zA-Z]*r\b/,
+  /\bdd\b.*\bof=/,
+  /\bmkfs\b/,
+  /\bformat\b/,
+  />\s*\/dev\/(sd|hd|nvme)/,
+  /\bsudo\s+rm\b/,
+  /\bchmod\s+-R\s+777\b/,
+];
+
+function isDestructive(command: string): string | null {
+  for (const pattern of DESTRUCTIVE_PATTERNS) {
+    if (pattern.test(command)) {
+      return pattern.toString();
+    }
+  }
+  return null;
+}
 
 export class BashTool extends Tool {
   definition: ToolDefinition = {
@@ -41,7 +62,20 @@ export class BashTool extends Tool {
 
     const command = input.command as string;
     const workdir = input.workdir ? resolve(input.workdir as string) : undefined;
-    const timeout = (input.timeout as number) || DEFAULT_TIMEOUT_MS;
+    const rawTimeout = (input.timeout as number) || DEFAULT_TIMEOUT_MS;
+    const timeout = Math.max(100, Math.min(MAX_TIMEOUT_MS, rawTimeout));
+
+    const destructiveMatch = isDestructive(command);
+    if (destructiveMatch) {
+      process.stderr.write(`[wardayacode] WARNING: Potentially destructive command blocked: ${command}\n`);
+      return {
+        success: false,
+        error: `Blocked: command matches a destructive pattern. If you intend to run this, adjust the permission mode or run it manually.`,
+        metadata: { command, workdir },
+      };
+    }
+
+    process.stderr.write(`[wardayacode] bash: ${command}\n`);
 
     return new Promise<ToolResult>((resolvePromise) => {
       let stdout = '';

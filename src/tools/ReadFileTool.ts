@@ -2,8 +2,16 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Tool } from './Tool.js';
 import { ToolDefinition, ToolResult } from '../types.js';
+import { assertPathContained } from './pathSafety.js';
 
 export class ReadFileTool extends Tool {
+  private readonly rootDir: string;
+
+  constructor(rootDir: string = process.cwd()) {
+    super();
+    this.rootDir = rootDir;
+  }
+
   definition: ToolDefinition = {
     name: 'read_file',
     description:
@@ -41,6 +49,7 @@ export class ReadFileTool extends Tool {
     const limit = (input.limit as number) || 2000;
 
     try {
+      assertPathContained(filePath, this.rootDir);
       const fileStat = await stat(filePath);
       if (fileStat.isDirectory()) {
         return {
