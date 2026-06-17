@@ -27,6 +27,7 @@ export class PermissionSystem {
       case 'default':
         this.rules = [
           { tool: 'bash', action: 'deny', reason: 'Bash requires approval in default mode' },
+          { tool: 'git', action: 'deny', reason: 'Git requires approval in default mode' },
           { tool: 'write_file', action: 'deny', reason: 'File write requires approval in default mode' },
           { tool: 'edit_file', action: 'deny', reason: 'File edit requires approval in default mode' },
           { tool: '*', action: 'allow' },
@@ -36,6 +37,7 @@ export class PermissionSystem {
       case 'plan':
         this.rules = [
           { tool: 'bash', action: 'deny', reason: 'Bash disabled in plan mode' },
+          { tool: 'git', action: 'deny', reason: 'Git disabled in plan mode' },
           { tool: 'write_file', action: 'deny', reason: 'File write disabled in plan mode' },
           { tool: 'edit_file', action: 'deny', reason: 'File edit disabled in plan mode' },
           { tool: '*', action: 'allow' },
@@ -45,6 +47,7 @@ export class PermissionSystem {
       case 'acceptEdits':
         this.rules = [
           { tool: 'bash', action: 'deny', reason: 'Bash requires approval in acceptEdits mode' },
+          { tool: 'git', action: 'deny', reason: 'Git requires approval in acceptEdits mode' },
           { tool: '*', action: 'allow' },
         ];
         break;
