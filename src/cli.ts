@@ -22,6 +22,7 @@ import { Session } from './session/Session.js';
 import { SessionManager } from './session/SessionManager.js';
 import { Checkpoint } from './tools/Checkpoint.js';
 import { App } from './ui/App.js';
+import { ErrorBoundary } from './ui/components/ErrorBoundary.js';
 import type { PermissionMode, ProviderName } from './types.js';
 
 const program = new Command();
@@ -237,17 +238,21 @@ function runTUI(
   initialPrompt?: string
 ): void {
   const { waitUntilExit } = render(
-    React.createElement(App, {
-      agent,
-      session,
-      model: config.model,
-      permissionMode: config.permissionMode,
-      themeMode: config.theme,
-      undoManager,
-      checkpoint,
-      permissions,
-      initialPrompt,
-    })
+    React.createElement(
+      ErrorBoundary,
+      null,
+      React.createElement(App, {
+        agent,
+        session,
+        model: config.model,
+        permissionMode: config.permissionMode,
+        themeMode: config.theme,
+        undoManager,
+        checkpoint,
+        permissions,
+        initialPrompt,
+      })
+    )
   );
 
   waitUntilExit().then(() => {

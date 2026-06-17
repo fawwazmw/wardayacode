@@ -68,19 +68,40 @@ export class Agent extends EventEmitter<AgentEvents> {
     const shape: Record<string, z.ZodType> = {};
 
     for (const [key, prop] of Object.entries(schema.properties)) {
-      const propSchema = prop as { type?: string; description?: string; enum?: string[] };
+      const propSchema = prop as {
+        type?: string;
+        description?: string;
+        enum?: string[];
+        minLength?: number;
+        maxLength?: number;
+        pattern?: string;
+        minimum?: number;
+        maximum?: number;
+      };
       let field: z.ZodType;
 
       switch (propSchema.type) {
-        case 'string':
-          field = propSchema.enum
-            ? z.enum(propSchema.enum as [string, ...string[]])
-            : z.string();
+        case 'string': {
+          if (propSchema.enum) {
+            field = z.enum(propSchema.enum as [string, ...string[]]);
+          } else {
+            let str = z.string();
+            if (propSchema.minLength !== undefined) str = str.min(propSchema.minLength);
+            if (propSchema.maxLength !== undefined) str = str.max(propSchema.maxLength);
+            if (propSchema.pattern !== undefined) str = str.regex(new RegExp(propSchema.pattern));
+            field = str;
+          }
           break;
+        }
         case 'number':
-        case 'integer':
-          field = z.number();
+        case 'integer': {
+          let num = z.number();
+          if (propSchema.minimum !== undefined) num = num.min(propSchema.minimum);
+          if (propSchema.maximum !== undefined) num = num.max(propSchema.maximum);
+          if (propSchema.type === 'integer') num = num.int();
+          field = num;
           break;
+        }
         case 'boolean':
           field = z.boolean();
           break;

@@ -35,7 +35,7 @@ export class ToolRegistry {
     }
 
     try {
-      if (!tool['validateInput'](input)) {
+      if (!tool.validateInput(input)) {
         return {
           success: false,
           error: `Invalid input for tool ${name}`,

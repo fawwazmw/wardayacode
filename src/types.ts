@@ -162,6 +162,7 @@ export interface Hook {
   event: HookEvent;
   handler: (context: HookContext) => Promise<HookResult>;
   priority?: number;
+  name?: string;
 }
 
 export interface HookResult {

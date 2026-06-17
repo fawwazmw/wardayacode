@@ -23,7 +23,7 @@ export abstract class Tool {
   /**
    * Validate input against schema
    */
-  protected validateInput(input: Record<string, unknown>): boolean {
+  validateInput(input: Record<string, unknown>): boolean {
     const schema = this.definition.inputSchema;
     if (!schema.required) return true;
 

@@ -29,7 +29,8 @@ export class HookSystem {
       try {
         await hook.handler(context);
       } catch (error) {
-        console.error(`Hook error in ${event}:`, error);
+        const hookId = hook.name ? `${hook.name} (${event})` : event;
+        console.error(`[wardayacode] Hook error in ${hookId}:`, error instanceof Error ? error.message : error);
       }
     }
   }

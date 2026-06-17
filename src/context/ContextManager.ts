@@ -86,7 +86,7 @@ export class ContextManager {
     // Walk backwards, keeping recent messages first
     for (let i = nonSystem.length - 1; i >= 0; i--) {
       const msg = nonSystem[i]!;
-      const msgTokens = msg.content.length / 4;
+      const msgTokens = Math.ceil(msg.content.length * 0.4) + 4;
 
       if (currentTokens + msgTokens > this.maxContextTokens * 0.9) {
         break;
@@ -112,7 +112,8 @@ export class ContextManager {
   }
 
   private estimateTokens(messages: Message[]): number {
-    return messages.reduce((sum, msg) => sum + Math.ceil(msg.content.length / 4), 0);
+    // ~0.4 tokens per char + 4-token overhead per message for role/formatting
+    return messages.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.4) + 4, 0);
   }
 
   getMessages(): Message[] {

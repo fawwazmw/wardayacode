@@ -76,6 +76,6 @@ describe('ContextManager', () => {
     ctx.addMessage(makeMessage('user', 'a'.repeat(400)));
 
     const result = await ctx.compact();
-    expect(result.tokenCount).toBe(100);
+    expect(result.tokenCount).toBe(164); // 400 chars * 0.4 + 4 per-message overhead
   });
 });
