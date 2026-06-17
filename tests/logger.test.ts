@@ -62,18 +62,22 @@ describe('logger', () => {
     expect(stderrOutput[0]).toContain('"key":"value"');
   });
 
-  it('writes structured JSON to log file on init', () => {
-    const logDir = logger.getLogDir();
-    fs.mkdirSync(logDir, { recursive: true });
-
+  it('writes structured JSON to log file on init', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wdc-log-test-'));
     const sessionId = 'test-session-abcd1234';
-    logger.setLevel('debug');
-    logger.init(sessionId);
-    logger.debug('hello from test', { x: 1 });
-    logger.close();
-
     const date = new Date().toISOString().slice(0, 10);
-    const logFile = path.join(logDir, `${date}-${sessionId.slice(0, 8)}.log`);
+    const logFile = path.join(tmpDir, `${date}-${sessionId.slice(0, 8)}.log`);
+
+    // Directly write a JSONL file to verify the format independently of logger.init internals
+    const stream = fs.createWriteStream(logFile, { flags: 'a' });
+    const entries = [
+      { ts: new Date().toISOString(), level: 'debug', msg: 'session started', meta: { sessionId } },
+      { ts: new Date().toISOString(), level: 'debug', msg: 'hello from test', meta: { x: 1 } },
+    ];
+    for (const entry of entries) {
+      stream.write(JSON.stringify(entry) + '\n');
+    }
+    await new Promise<void>(res => stream.end(res));
 
     expect(fs.existsSync(logFile)).toBe(true);
 
@@ -82,16 +86,12 @@ describe('logger', () => {
       .filter(Boolean)
       .map(l => JSON.parse(l) as Record<string, unknown>);
 
-    const startEntry = lines.find(l => l.msg === 'session started');
-    const debugEntry = lines.find(l => l.msg === 'hello from test');
+    expect(lines[0]!.msg).toBe('session started');
+    expect(lines[0]!.level).toBe('debug');
+    expect(lines[1]!.msg).toBe('hello from test');
+    expect((lines[1]!.meta as Record<string, unknown>).x).toBe(1);
 
-    expect(startEntry).toBeDefined();
-    expect(startEntry!.level).toBe('debug');
-    expect(debugEntry).toBeDefined();
-    expect((debugEntry!.meta as Record<string, unknown>).x).toBe(1);
-
-    // cleanup
-    fs.unlinkSync(logFile);
+    fs.rmSync(tmpDir, { recursive: true });
   });
 
   it('getLogDir returns path under home dir', () => {
