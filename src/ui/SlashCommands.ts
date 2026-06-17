@@ -39,6 +39,10 @@ export interface SlashCommandContext {
   getTokenUsage: () => { input: number; output: number };
   getMessageCount: () => number;
   exit: () => void;
+  undo: () => Promise<string>;
+  checkpoint: () => Promise<string>;
+  rollback: () => Promise<string>;
+  diff: () => Promise<string>;
 }
 
 export interface SlashCommandResult {
@@ -48,10 +52,10 @@ export interface SlashCommandResult {
 
 const VALID_MODES: PermissionMode[] = ['default', 'plan', 'acceptEdits', 'auto', 'internal'];
 
-export function handleSlashCommand(
+export async function handleSlashCommand(
   input: string,
   ctx: SlashCommandContext
-): SlashCommandResult {
+): Promise<SlashCommandResult> {
   const trimmed = input.trim();
   if (!trimmed.startsWith('/')) {
     return { handled: false };
@@ -103,6 +107,18 @@ export function handleSlashCommand(
       const usage = ctx.getTokenUsage();
       return { handled: true, output: `Tokens — Input: ~${usage.input} | Output: ~${usage.output} | Total: ~${usage.input + usage.output}` };
     }
+
+    case '/undo':
+      return { handled: true, output: await ctx.undo() };
+
+    case '/checkpoint':
+      return { handled: true, output: await ctx.checkpoint() };
+
+    case '/rollback':
+      return { handled: true, output: await ctx.rollback() };
+
+    case '/diff':
+      return { handled: true, output: await ctx.diff() };
 
     case '/exit':
     case '/quit':

@@ -11,84 +11,127 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     getTokenUsage: () => ({ input: 100, output: 200 }),
     getMessageCount: () => 5,
     exit: vi.fn(),
+    undo: vi.fn().mockResolvedValue('Undid edit_file on src/foo.ts'),
+    checkpoint: vi.fn().mockResolvedValue('Checkpoint created (git stash).'),
+    rollback: vi.fn().mockResolvedValue('Rolled back to last checkpoint.'),
+    diff: vi.fn().mockResolvedValue(' src/foo.ts | 2 +-'),
     ...overrides,
   };
 }
 
 describe('handleSlashCommand', () => {
-  it('ignores non-slash input', () => {
+  it('ignores non-slash input', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('hello world', ctx);
+    const result = await handleSlashCommand('hello world', ctx);
     expect(result.handled).toBe(false);
   });
 
-  it('handles /help', () => {
+  it('handles /help', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('/help', ctx);
+    const result = await handleSlashCommand('/help', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('/help');
     expect(result.output).toContain('/clear');
   });
 
-  it('handles /clear', () => {
+  it('handles /clear', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('/clear', ctx);
+    const result = await handleSlashCommand('/clear', ctx);
     expect(result.handled).toBe(true);
     expect(ctx.clearMessages).toHaveBeenCalled();
   });
 
-  it('handles /session', () => {
+  it('handles /session', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('/session', ctx);
+    const result = await handleSlashCommand('/session', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('test-session-id-1234');
     expect(result.output).toContain('claude-sonnet');
   });
 
-  it('handles /mode without arg (shows current)', () => {
+  it('handles /mode without arg (shows current)', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('/mode', ctx);
+    const result = await handleSlashCommand('/mode', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('default');
   });
 
-  it('handles /mode with valid arg', () => {
+  it('handles /mode with valid arg', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('/mode auto', ctx);
+    const result = await handleSlashCommand('/mode auto', ctx);
     expect(result.handled).toBe(true);
     expect(ctx.setPermissionMode).toHaveBeenCalledWith('auto');
   });
 
-  it('handles /mode with invalid arg', () => {
+  it('handles /mode with invalid arg', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('/mode invalid', ctx);
+    const result = await handleSlashCommand('/mode invalid', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('Invalid mode');
   });
 
-  it('handles /tokens', () => {
+  it('handles /model', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('/tokens', ctx);
+    const result = await handleSlashCommand('/model', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('claude-sonnet-4-20250514');
+  });
+
+  it('handles /tokens', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/tokens', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('100');
     expect(result.output).toContain('200');
   });
 
-  it('handles /exit', () => {
+  it('handles /undo', async () => {
     const ctx = createMockContext();
-    handleSlashCommand('/exit', ctx);
+    const result = await handleSlashCommand('/undo', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.undo).toHaveBeenCalled();
+    expect(result.output).toContain('Undid');
+  });
+
+  it('handles /checkpoint', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/checkpoint', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.checkpoint).toHaveBeenCalled();
+    expect(result.output).toContain('Checkpoint');
+  });
+
+  it('handles /rollback', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/rollback', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.rollback).toHaveBeenCalled();
+    expect(result.output).toContain('Rolled back');
+  });
+
+  it('handles /diff', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/diff', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.diff).toHaveBeenCalled();
+    expect(result.output).toContain('src/foo.ts');
+  });
+
+  it('handles /exit', async () => {
+    const ctx = createMockContext();
+    await handleSlashCommand('/exit', ctx);
     expect(ctx.exit).toHaveBeenCalled();
   });
 
-  it('handles /quit', () => {
+  it('handles /quit', async () => {
     const ctx = createMockContext();
-    handleSlashCommand('/quit', ctx);
+    await handleSlashCommand('/quit', ctx);
     expect(ctx.exit).toHaveBeenCalled();
   });
 
-  it('handles unknown command', () => {
+  it('handles unknown command', async () => {
     const ctx = createMockContext();
-    const result = handleSlashCommand('/unknown', ctx);
+    const result = await handleSlashCommand('/unknown', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('Unknown command');
   });

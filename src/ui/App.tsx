@@ -150,7 +150,7 @@ export function App({
       return;
     }
 
-    const cmdResult = handleSlashCommand(text, {
+    const cmdResult = await handleSlashCommand(text, {
       clearMessages: () => setMessages([]),
       setPermissionMode: (mode) => {
         setCurrentPermissionMode(mode);
@@ -162,40 +162,28 @@ export function App({
       getTokenUsage: () => tokenUsage,
       getMessageCount: () => messages.length,
       exit,
+      undo: async () => {
+        const result = await undoManager.undo();
+        return result ? `Undid ${result.toolName} on ${result.filePath}` : 'Nothing to undo.';
+      },
+      checkpoint: async () => {
+        const created = await checkpoint.createCheckpoint('manual checkpoint');
+        return created ? 'Checkpoint created (git stash).' : 'No changes to checkpoint.';
+      },
+      rollback: async () => {
+        const rolled = await checkpoint.rollback();
+        return rolled ? 'Rolled back to last checkpoint.' : 'No checkpoint to rollback to.';
+      },
+      diff: async () => {
+        const d = await checkpoint.getDiff();
+        return d || 'No uncommitted changes.';
+      },
     });
 
     if (cmdResult.handled) {
       if (cmdResult.output) {
         addSystemMessage(cmdResult.output);
       }
-      return;
-    }
-
-    if (text === '/undo') {
-      const result = await undoManager.undo();
-      if (result) {
-        addSystemMessage(`Undid ${result.toolName} on ${result.filePath}`);
-      } else {
-        addSystemMessage('Nothing to undo.');
-      }
-      return;
-    }
-
-    if (text === '/checkpoint') {
-      const created = await checkpoint.createCheckpoint('manual checkpoint');
-      addSystemMessage(created ? 'Checkpoint created (git stash).' : 'No changes to checkpoint.');
-      return;
-    }
-
-    if (text === '/rollback') {
-      const rolled = await checkpoint.rollback();
-      addSystemMessage(rolled ? 'Rolled back to last checkpoint.' : 'No checkpoint to rollback to.');
-      return;
-    }
-
-    if (text === '/diff') {
-      const diff = await checkpoint.getDiff();
-      addSystemMessage(diff || 'No uncommitted changes.');
       return;
     }
 
