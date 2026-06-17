@@ -26,7 +26,7 @@ export async function gatherProjectContext(projectRoot: string): Promise<Project
     hasGit: false,
   };
 
-  const checks = await Promise.allSettled([
+  await Promise.allSettled([
     detectNodeProject(projectRoot, info),
     detectPythonProject(projectRoot, info),
     detectRustProject(projectRoot, info),

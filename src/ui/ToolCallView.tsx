@@ -25,8 +25,6 @@ export function ToolCallView({
   themeMode,
 }: ToolCallViewProps): React.ReactElement {
   const colors = inkColors[themeMode];
-  const isDark = themeMode === 'dark';
-  const dimBg = isDark ? '#1A1A2E' : '#F3F4F6';
 
   const icon = result
     ? result.success ? '✓' : '✗'

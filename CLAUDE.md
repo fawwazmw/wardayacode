@@ -77,3 +77,87 @@ Sessions live in `.wardayacode/` at the project root as append-only JSONL files 
 ### Test Setup
 
 Vitest globals are enabled — `describe`, `it`, `expect`, `beforeEach` etc. are available without imports. Tests live in `tests/`, coverage excludes `src/ui/**` and `.tsx` files.
+
+## Branch Strategy (Git Flow)
+
+Two permanent branches:
+- `main` — production only, always matches the latest npm release
+- `develop` — integration branch, default branch for all PRs
+
+Branch naming:
+- `feature/xxx` — new features, branch from `develop`
+- `fix/xxx` — bug fixes, branch from `develop`
+- `release/x.x.x` — release prep, branch from `develop`
+- `hotfix/x.x.x` — urgent production fixes, branch from `main`
+
+Both `main` and `develop` are protected — CI must pass before merging.
+
+## Development Workflow
+
+```bash
+# start work
+git checkout develop
+git pull origin develop
+git checkout -b feature/my-feature
+
+# work, commit, push
+git push origin feature/my-feature
+gh pr create --base develop --title "feat: my feature"
+# PR is reviewed, CI passes, merge into develop
+```
+
+## Release Workflow
+
+```bash
+# cut a release branch from develop
+git checkout -b release/0.2.0 develop
+
+# bump version
+npm version minor   # or patch / major
+
+# push and PR into main
+git push origin release/0.2.0
+gh pr create --base main --title "release: v0.2.0"
+
+# after merging into main, create the GitHub release (triggers npm publish)
+git checkout main && git pull origin main
+gh release create v0.2.0 --generate-notes
+
+# merge release branch back into develop
+gh pr create --base develop --head release/0.2.0 --title "chore: merge release/0.2.0 back into develop"
+```
+
+## Hotfix Workflow
+
+```bash
+# branch from main, not develop
+git checkout -b hotfix/0.1.5 main
+
+# fix, bump patch version
+npm version patch
+git push origin hotfix/0.1.5
+
+# PR into main → merge → release → publish
+gh pr create --base main --title "fix: critical bug"
+gh release create v0.1.5 --generate-notes
+
+# also merge back into develop
+gh pr create --base develop --head hotfix/0.1.5 --title "chore: merge hotfix/0.1.5 into develop"
+```
+
+## npm Publish
+
+Publishing is fully automated — **never run `npm publish` manually**.
+
+Trigger: create a GitHub release → `.github/workflows/publish.yml` runs automatically.
+- Builds, type-checks, and tests before publishing
+- Publishes with provenance (`--provenance --access public`)
+- Auto-generates release notes
+- Auth: `NPM_TOKEN` secret stored in the `npm-publish` GitHub environment
+
+## CI/CD
+
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| `ci.yml` | push/PR to `main` or `develop` | lint, type-check, tests on Node 20 & 22 |
+| `publish.yml` | GitHub release published | build, type-check, test, npm publish, update release notes |
