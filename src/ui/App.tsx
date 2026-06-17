@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Box, useApp } from 'ink';
-import type { CoreMessage } from 'ai';
 import type { Agent } from '../agent/index.js';
 import type { Session } from '../session/Session.js';
 import type { PermissionMode } from '../types.js';
 import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { UndoManager } from '../tools/UndoManager.js';
 import type { Checkpoint } from '../tools/Checkpoint.js';
+import { ContextManager } from '../context/ContextManager.js';
 import { ChatView, type ChatMessage } from './ChatView.js';
 import { InputBar } from './InputBar.js';
 import { StatusBar } from './StatusBar.js';
@@ -55,7 +55,7 @@ export function App({
   const [streamingText, setStreamingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tokenUsage, setTokenUsage] = useState({ input: 0, output: 0 });
-  const [conversationHistory, setConversationHistory] = useState<CoreMessage[]>([]);
+  const contextManagerRef = useRef<ContextManager>(new ContextManager(process.cwd()));
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -197,7 +197,20 @@ export function App({
       content: text,
     });
 
-    const newHistory: CoreMessage[] = [...conversationHistory, { role: 'user' as const, content: text }];
+    const ctx = contextManagerRef.current;
+    ctx.addCoreMessage('user', text);
+
+    // Compact before sending if we're approaching the token budget
+    if (ctx.shouldCompact()) {
+      const compacted = await ctx.compact();
+      ctx.clear();
+      for (const m of compacted.messages) {
+        ctx.addMessage(m);
+      }
+      addSystemMessage(`Context compacted: ${compacted.compactionLayers.length} layer(s) applied, ~${compacted.tokenCount.toLocaleString()} tokens remaining.`);
+    }
+
+    const newHistory = ctx.toCoreMessages();
     abortRef.current = new AbortController();
 
     const textDeltaHandler = (delta: string) => {
@@ -235,7 +248,7 @@ export function App({
 
       setStreamingText('');
       setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response }]);
-      setConversationHistory([...newHistory, { role: 'assistant' as const, content: response }]);
+      ctx.addCoreMessage('assistant', response);
 
       await session.append({
         id: crypto.randomUUID(),
@@ -262,7 +275,7 @@ export function App({
       abortRef.current = null;
       setIsLoading(false);
     }
-  }, [agent, session, conversationHistory, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions]);
+  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions]);
 
   React.useEffect(() => {
     if (initialPrompt) {
