@@ -15,7 +15,10 @@
       "WebFetch(domain:docs.npmjs.com)",
       "WebFetch(domain:docs.github.com)",
       "Bash(npm version *)",
-      "Bash(gh run *)"
+      "Bash(gh run *)",
+      "Bash(gh release *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(gh secret *)"
     ]
   }
 }
