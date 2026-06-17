@@ -38,7 +38,7 @@ interface WelcomeScreenProps {
 export function WelcomeScreen({
   model,
   permissionMode,
-  sessionId,
+  sessionId: _sessionId,
   cwd,
   themeMode,
   version,
