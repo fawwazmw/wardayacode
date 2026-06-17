@@ -18,7 +18,9 @@
       "Bash(gh run *)",
       "Bash(gh release *)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(gh secret *)"
+      "Bash(gh secret *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(gh api *)"
     ]
   }
 }
