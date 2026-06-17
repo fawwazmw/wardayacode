@@ -1,176 +1,247 @@
 # wardayacode
 
-AI-powered coding agent for the terminal. Multi-provider, full-featured.
+AI-powered coding agent for the terminal. Supports Claude, GPT-4, and Gemini out of the box.
 
 ```
 $ wardayacode
 ❯ Fix the authentication bug in src/auth.ts
 
-● Reading src/auth.ts...
-● Found issue: token expiry check uses wrong comparison
-● Editing src/auth.ts...
-✓ Fixed: changed `>` to `<` in token expiry check on line 42
+● read_file(src/auth.ts)
+✓ Found issue: token expiry check uses wrong comparison
+● edit_file(src/auth.ts)
+✓ Fixed: changed > to < in token expiry check on line 42
+
+The bug was on line 42 — the expiry comparison was inverted.
+I've corrected it and the token validation should now work as expected.
 ```
 
-## Features
+## Install
 
-- **Multi-Provider** — Claude, GPT-4, Gemini, or any OpenAI-compatible API
-- **Full Tool Suite** — File read/write/edit, bash execution, glob, grep, git
-- **Interactive TUI** — Rich terminal interface with streaming responses
-- **Permission System** — 5 graduated trust levels (default → auto → internal)
-- **Session Persistence** — Resume conversations, review history
-- **Extensible** — Hooks, skills, and plugin system
+```bash
+npm install -g wardayacode
+```
+
+Requires Node.js 20+.
 
 ## Quick Start
 
+**1. Set your API key**
+
 ```bash
-# Install
-npm install -g wardayacode
+# Anthropic (Claude)
+export ANTHROPIC_API_KEY=sk-ant-...
 
-# Or run from source
-git clone https://github.com/wardayadev/wardayacode
-cd wardayacode
-npm install
-npm run dev
-
-# Set your API key
-export ANTHROPIC_API_KEY=sk-...
-# or
+# OpenAI
 export OPENAI_API_KEY=sk-...
-# or
-export GOOGLE_GENERATIVE_AI_API_KEY=...
+
+# Google (Gemini)
+export GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 ```
+
+Or save it permanently:
+
+```bash
+wardayacode auth login anthropic
+wardayacode auth login openai
+wardayacode auth login google
+```
+
+**2. Run it**
+
+```bash
+wardayacode        # interactive TUI
+wdc                # short alias
+```
+
+**3. Start coding**
+
+Type any task in natural language. The agent reads your files, makes edits, runs commands, and explains what it did.
 
 ## Usage
 
 ```bash
-# Interactive mode (default)
+# Interactive TUI (default)
 wardayacode
 
-# Short alias
-wdc
+# Send an initial prompt directly
+wardayacode "add input validation to src/api/users.ts"
 
-# With specific model
+# Choose a model
+wardayacode --model gpt-4o --provider openai
+wardayacode --model gemini-2.0-flash --provider google
 wardayacode --model claude-sonnet-4-20250514 --provider anthropic
 
-# With permission mode
-wardayacode --mode auto  # Auto-approve safe operations
+# Set permission mode
+wardayacode --mode auto        # approve everything automatically
+wardayacode --mode plan        # read-only, no file writes
 
-# Plain text mode (no TUI)
-wardayacode --no-tui
+# Resume a previous session
+wardayacode sessions list
+wardayacode --resume <sessionId>
 
-# Authenticate providers (saved in ~/.config/wardayacode/config.json)
-wardayacode auth login openai
-wardayacode auth login anthropic
-wardayacode auth login google
-wardayacode auth list
-wardayacode auth logout openai
+# Debug mode (logs tool calls to ~/.wardayacode/logs/)
+wardayacode --debug
+
+# Non-interactive (pipe-friendly)
+wardayacode --no-tui "summarize the architecture"
 ```
+
+## Slash Commands
+
+Type `/` in the TUI to open the command palette, or use these directly:
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show all available commands |
+| `/clear` | Clear the conversation |
+| `/mode <mode>` | Switch permission mode |
+| `/model` | Show current model |
+| `/session` | Show session info |
+| `/tokens` | Show token usage |
+| `/undo` | Revert the last file change |
+| `/diff` | Show uncommitted git changes |
+| `/checkpoint` | Create a git stash checkpoint |
+| `/rollback` | Restore last checkpoint |
+| `/login <provider> <key>` | Save an API key |
+| `/logout <provider>` | Remove a saved API key |
+| `/auth` | Show provider auth status |
+| `/exit` | Exit wardayacode |
+
+## Permission Modes
+
+wardayacode asks before making changes. You control how much it can do automatically:
+
+| Mode | File reads | File writes | Bash / Git | Use when |
+|------|-----------|------------|-----------|----------|
+| `default` | ✅ auto | ❓ prompt | ❓ prompt | Daily use |
+| `plan` | ✅ auto | ❌ blocked | ❌ blocked | Review-only |
+| `acceptEdits` | ✅ auto | ✅ auto | ❓ prompt | Trusted edits |
+| `auto` | ✅ auto | ✅ auto | ✅ auto | Scripting / CI |
+| `internal` | ✅ auto | ✅ auto | ✅ auto | Fully trusted |
+
+Switch mode mid-session with `/mode <name>` or choose "Always allow" when prompted.
+
+## Tools
+
+The agent has access to these tools:
+
+| Tool | What it does |
+|------|-------------|
+| `read_file` | Read a file with optional line range |
+| `write_file` | Create or overwrite a file |
+| `edit_file` | Surgical string-replacement edits |
+| `bash` | Run shell commands |
+| `git` | Run git commands (status, log, diff, add, commit, push, …) |
+| `glob` | Find files by pattern (`**/*.ts`) |
+| `grep` | Search file contents with regex |
+| `list_files` | List a directory |
+
+Dangerous operations (force push, `rm -rf`, `dd`, etc.) are permanently blocked regardless of permission mode.
 
 ## Configuration
 
-Create `.wardayacode.json` in your project root or `~/.config/wardayacode/config.json`:
+Create `.wardayacode.json` in your project root for project-level config, or `~/.config/wardayacode/config.json` for global defaults:
 
 ```json
 {
   "provider": "anthropic",
   "model": "claude-sonnet-4-20250514",
-  "apiKeys": {
-    "anthropic": "sk-ant-...",
-    "openai": "sk-...",
-    "google": "AIza..."
-  },
+  "permissionMode": "default",
   "maxTokens": 8192,
   "temperature": 0,
-  "permissionMode": "default",
   "theme": "dark"
 }
 ```
 
-You can also use environment variables:
+API keys can also live in config (though environment variables are preferred):
 
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`
-- `GOOGLE_GENERATIVE_AI_API_KEY`
-
-## Architecture
-
-```
-src/
-├── cli.ts              # Entry point (Commander.js)
-├── types.ts            # Core type definitions
-├── agent/              # Agent loop (ReAct pattern)
-│   └── Agent.ts        # Stream LLM → parse tool calls → execute → loop
-├── providers/          # LLM provider abstraction (Vercel AI SDK)
-│   ├── anthropic.ts    # Claude
-│   ├── openai.ts       # GPT
-│   └── google.ts       # Gemini
-├── tools/              # Tool implementations
-│   ├── ReadFileTool.ts
-│   ├── EditFileTool.ts
-│   ├── BashTool.ts
-│   ├── GlobTool.ts
-│   └── GrepTool.ts
-├── permissions/        # Permission system (deny-first)
-├── session/            # Append-only JSONL transcripts
-├── context/            # Context management & compaction
-├── config/             # Configuration (cosmiconfig)
-├── ui/                 # Terminal UI (React + Ink)
-│   ├── App.tsx
-│   ├── ChatView.tsx
-│   ├── InputBar.tsx
-│   └── StatusBar.tsx
-└── extensibility/      # Hooks & skills
+```json
+{
+  "apiKeys": {
+    "anthropic": "sk-ant-...",
+    "openai": "sk-...",
+    "google": "AIza..."
+  }
+}
 ```
 
-## Permission Modes
+**Config priority** (highest wins): CLI flags → project `.wardayacode.json` → user config → defaults.
 
-| Mode | Description |
-|------|-------------|
-| `default` | Read-only tools allowed. Write/bash require approval. |
-| `plan` | Read + plan tools. No execution. |
-| `acceptEdits` | Read + write allowed. Bash requires approval. |
-| `auto` | Auto-approve safe operations. Dangerous ops still prompt. |
-| `internal` | All tools allowed (trusted/CI mode). |
+## Sessions
 
-## Tools
+Conversations are saved automatically as JSONL files in `.wardayacode/` in your project directory.
 
-| Tool | Description | Permission |
-|------|-------------|-----------|
-| `read_file` | Read file contents with line numbers | No |
-| `write_file` | Create/overwrite files | Yes |
-| `edit_file` | String replacement editing | Yes |
-| `bash` | Execute shell commands | Yes |
-| `glob` | Find files by pattern | No |
-| `grep` | Search file contents | No |
-| `list_files` | List directory contents | No |
+```bash
+wardayacode sessions list          # list sessions
+wardayacode sessions delete <id>   # delete a session
+wardayacode --resume <id>          # resume a session
+```
+
+Sessions let you continue where you left off across terminal restarts.
+
+## Debug & Logs
+
+```bash
+wardayacode --debug "fix the bug"
+```
+
+With `--debug`, all tool calls, results, and errors are written to:
+
+```
+~/.wardayacode/logs/YYYY-MM-DD-<sessionId>.log
+```
+
+Each line is structured JSON (`ts`, `level`, `msg`, `meta`). Tail it in another terminal:
+
+```bash
+tail -f ~/.wardayacode/logs/$(ls -t ~/.wardayacode/logs | head -1)
+```
+
+You can also set `LOG_LEVEL=debug` as an environment variable.
+
+## Troubleshooting
+
+**`command not found: wardayacode`**
+```bash
+npm install -g wardayacode
+# if still not found, check npm global bin is in your PATH:
+npm config get prefix   # add <prefix>/bin to PATH
+```
+
+**API key errors**
+```bash
+wardayacode auth list    # check which providers are configured
+wardayacode auth login anthropic   # re-enter the key
+```
+
+**Agent makes too many changes**
+Use `/mode plan` to switch to read-only mode mid-session, or start with `--mode plan`.
+
+**Long conversations slow down or lose context**
+wardayacode automatically compacts context when it nears the token limit. You'll see a system message when this happens. Use `/clear` to start fresh if needed.
+
+**Something went wrong and files were changed**
+```bash
+/undo          # revert the last file edit
+/rollback      # restore to last git checkpoint
+/diff          # see what changed
+```
 
 ## Development
 
 ```bash
-# Development mode (auto-reload)
-npm run dev
+git clone https://github.com/fawwazmw/wardayacode
+cd wardayacode
+npm install
 
-# Type check
-npm run type-check
-
-# Run tests
-npm test
-
-# Build
-npm run build
+npm run dev            # run from source (no build)
+npm run build          # bundle to dist/
+npm run type-check     # TypeScript strict check
+npm run lint           # ESLint
+npm test               # Vitest watch mode
+npm run test:run       # single CI run
 ```
-
-## Tech Stack
-
-- **Runtime**: Node.js 20+
-- **Language**: TypeScript (strict mode)
-- **LLM SDK**: Vercel AI SDK (multi-provider)
-- **TUI**: React + Ink
-- **CLI**: Commander.js
-- **Config**: Cosmiconfig
-- **Persistence**: SQLite (better-sqlite3)
 
 ## License
 
-MIT - Wardaya Dev
+MIT — [Fawwaz Mufid W](https://github.com/fawwazmw)
