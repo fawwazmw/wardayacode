@@ -4,6 +4,7 @@ import EventEmitter from 'eventemitter3';
 import type { ToolRegistry } from '../tools/ToolRegistry.js';
 import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { ToolResult } from '../types.js';
+import { logger } from '../utils/logger.js';
 
 export interface AgentConfig {
   model: LanguageModel;
@@ -134,15 +135,24 @@ export class Agent extends EventEmitter<AgentEvents> {
         success: false,
         error: `Permission denied: ${permissionResult.reason ?? 'No reason provided'}`,
       };
+      logger.warn('tool denied', { tool: name, reason: permissionResult.reason });
       this.emit('tool-call-result', { toolName: name, result: deniedResult });
       return JSON.stringify(deniedResult);
     }
 
+    logger.debug('tool call', { tool: name, args });
     this.emit('tool-call-start', { toolName: name, args });
 
+    const start = Date.now();
     const result = await this.toolRegistry.execute(name, args);
-    this.emit('tool-call-result', { toolName: name, result });
+    const durationMs = Date.now() - start;
 
+    logger.debug('tool result', { tool: name, success: result.success, durationMs });
+    if (!result.success) {
+      logger.warn('tool failed', { tool: name, error: result.error, durationMs });
+    }
+
+    this.emit('tool-call-result', { toolName: name, result });
     return JSON.stringify(result);
   }
 
@@ -158,6 +168,8 @@ export class Agent extends EventEmitter<AgentEvents> {
     const tools = this.buildTools();
     let fullText = '';
     let stepCount = 0;
+
+    logger.debug('agent run started', { messageCount: messages.length, model: String(this.model) });
 
     try {
       const result = streamText({
@@ -188,10 +200,12 @@ export class Agent extends EventEmitter<AgentEvents> {
         }
       }
 
+      logger.debug('agent run done', { steps: stepCount, outputChars: fullText.length });
       this.emit('done', { text: fullText, steps: stepCount });
       return fullText;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('agent run failed', { error: err.message });
       this.emit('error', err);
       throw err;
     }

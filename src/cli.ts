@@ -13,6 +13,7 @@ import {
   isAuthProvider,
   getProviderEnvVarName,
 } from './config/index.js';
+import { logger } from './utils/logger.js';
 import { createProvider } from './providers/index.js';
 import { ToolRegistry, registerCoreTools, UndoManager } from './tools/index.js';
 import { PermissionSystem } from './permissions/PermissionSystem.js';
@@ -43,6 +44,7 @@ program
   .option('-t, --temperature <temp>', 'Temperature (0-1)', parseFloat)
   .option('--max-tokens <tokens>', 'Max tokens per response', parseInt)
   .option('--system-prompt <prompt>', 'Custom system prompt')
+  .option('--debug', 'Enable debug logging (writes to ~/.wardayacode/logs/)')
   .argument('[prompt]', 'Initial prompt to send')
   .action(async (initialPrompt, options) => {
     try {
@@ -177,9 +179,15 @@ interface CLIOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  debug?: boolean;
 }
 
 async function run(initialPrompt: string | undefined, options: CLIOptions): Promise<void> {
+  if (options.debug) {
+    logger.setDebug(true);
+    logger.debug('debug mode enabled', { logDir: logger.getLogDir() });
+  }
+
   const config = await loadConfig({
     ...(options.model ? { model: options.model } : {}),
     ...(options.provider ? { provider: options.provider as ProviderName } : {}),
@@ -220,6 +228,9 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   const session = options.resume
     ? await loadSession(options.resume, projectRoot, config.permissionMode)
     : await Session.create(projectRoot, config.permissionMode);
+
+  logger.init(session.getId());
+  process.on('exit', () => logger.close());
 
   if (options.tui !== false) {
     runTUI(agent, session, config, undoManager, checkpoint, permissions, initialPrompt);
