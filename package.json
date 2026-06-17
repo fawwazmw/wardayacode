@@ -81,6 +81,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fawwazmw/wardayacode"
+    "url": "git+https://github.com/fawwazmw/wardayacode.git"
   }
 }
