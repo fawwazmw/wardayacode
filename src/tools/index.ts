@@ -6,6 +6,7 @@ import { BashTool } from './BashTool.js';
 import { GlobTool } from './GlobTool.js';
 import { GrepTool } from './GrepTool.js';
 import { ListFilesTool } from './ListFilesTool.js';
+import { GitTool } from './GitTool.js';
 import { UndoManager } from './UndoManager.js';
 
 export { Tool } from './Tool.js';
@@ -20,6 +21,7 @@ export { ListFilesTool } from './ListFilesTool.js';
 export { UndoManager } from './UndoManager.js';
 export { generateDiff } from './DiffView.js';
 export { Checkpoint } from './Checkpoint.js';
+export { GitTool } from './GitTool.js';
 
 export function registerCoreTools(registry: ToolRegistry, undoManager?: UndoManager): void {
   registry.register(new ReadFileTool());
@@ -36,4 +38,5 @@ export function registerCoreTools(registry: ToolRegistry, undoManager?: UndoMana
   registry.register(new GlobTool());
   registry.register(new GrepTool());
   registry.register(new ListFilesTool());
+  registry.register(new GitTool());
 }

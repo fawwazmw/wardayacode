@@ -2,7 +2,7 @@
  * Base Tool class - all tools extend this
  */
 
-import { ToolDefinition, ToolResult, ToolUse } from '../types.js';
+import { ToolDefinition, ToolResult } from '../types.js';
 
 export abstract class Tool {
   abstract definition: ToolDefinition;
@@ -16,7 +16,7 @@ export abstract class Tool {
    * Optional: custom permission logic
    * Override to implement tool-specific permission checks
    */
-  async checkPermission?(context: Record<string, unknown>): Promise<boolean> {
+  async checkPermission?(_context: Record<string, unknown>): Promise<boolean> {
     return true;
   }
 

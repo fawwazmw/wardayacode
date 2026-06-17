@@ -17,8 +17,6 @@ export function CommandPalette({
   if (commands.length === 0) return null;
 
   const colors = inkColors[themeMode];
-  const isDark = themeMode === 'dark';
-  const highlightBg = isDark ? '#2D2B55' : '#EDE9FE';
 
   return (
     <Box

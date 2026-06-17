@@ -3,7 +3,7 @@
  */
 
 import { Tool } from './Tool.js';
-import { ToolDefinition, ToolResult, ToolUse } from '../types.js';
+import { ToolDefinition, ToolResult } from '../types.js';
 
 export class ToolRegistry {
   private tools = new Map<string, Tool>();
