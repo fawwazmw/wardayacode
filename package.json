@@ -5,8 +5,8 @@
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
-    "wardayacode": "./dist/cli.js",
-    "wdc": "./dist/cli.js"
+    "wardayacode": "dist/cli.js",
+    "wdc": "dist/cli.js"
   },
   "files": [
     "dist",
