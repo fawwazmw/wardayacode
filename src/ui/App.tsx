@@ -178,6 +178,13 @@ export function App({
         const d = await checkpoint.getDiff();
         return d || 'No uncommitted changes.';
       },
+      compact: async () => {
+        const ctx = contextManagerRef.current;
+        const compacted = await ctx.compact();
+        ctx.clear();
+        for (const m of compacted.messages) ctx.addMessage(m);
+        return `Context compacted: ${compacted.compactionLayers.length} layer(s) applied, ~${compacted.tokenCount.toLocaleString()} tokens remaining.`;
+      },
     });
 
     if (cmdResult.handled) {
@@ -239,9 +246,23 @@ export function App({
       });
     };
 
+    const retryHandler = ({ attempt, maxRetries, delayMs, error }: { attempt: number; maxRetries: number; delayMs: number; error: string }) => {
+      const delaySec = (delayMs / 1000).toFixed(1);
+      addSystemMessage(`Retrying (attempt ${attempt + 1}/${maxRetries + 1}) in ${delaySec}s — ${error}`);
+    };
+
+    const usageHandler = ({ promptTokens, completionTokens }: { promptTokens: number; completionTokens: number; totalTokens: number }) => {
+      setTokenUsage(prev => ({
+        input: prev.input + promptTokens,
+        output: prev.output + completionTokens,
+      }));
+    };
+
     agent.on('text-delta', textDeltaHandler);
     agent.on('tool-call-start', toolCallStartHandler);
     agent.on('tool-call-result', toolCallResultHandler);
+    agent.on('retry', retryHandler);
+    agent.on('usage', usageHandler);
 
     try {
       const response = await agent.run(newHistory);
@@ -255,11 +276,6 @@ export function App({
         role: 'assistant',
         content: response,
       });
-
-      setTokenUsage(prev => ({
-        input: prev.input + Math.ceil(text.length / 4),
-        output: prev.output + Math.ceil(response.length / 4),
-      }));
     } catch (error) {
       setStreamingText('');
       if ((error as Error).name === 'AbortError') {
@@ -272,6 +288,8 @@ export function App({
       agent.off('text-delta', textDeltaHandler);
       agent.off('tool-call-start', toolCallStartHandler);
       agent.off('tool-call-result', toolCallResultHandler);
+      agent.off('retry', retryHandler);
+      agent.off('usage', usageHandler);
       abortRef.current = null;
       setIsLoading(false);
     }

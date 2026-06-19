@@ -43,6 +43,7 @@ program
   .option('--resume <sessionId>', 'Resume a previous session')
   .option('-t, --temperature <temp>', 'Temperature (0-1)', parseFloat)
   .option('--max-tokens <tokens>', 'Max tokens per response', parseInt)
+  .option('--max-retries <n>', 'Max API call retries (default: 3)', parseInt)
   .option('--system-prompt <prompt>', 'Custom system prompt')
   .option('--debug', 'Enable debug logging (writes to ~/.wardayacode/logs/)')
   .argument('[prompt]', 'Initial prompt to send')
@@ -178,6 +179,7 @@ interface CLIOptions {
   resume?: string;
   temperature?: number;
   maxTokens?: number;
+  maxRetries?: number;
   systemPrompt?: string;
   debug?: boolean;
 }
@@ -194,6 +196,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     ...(options.mode ? { permissionMode: options.mode as PermissionMode } : {}),
     ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
     ...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
+    ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
   });
 
   const model = createProvider({
@@ -221,6 +224,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     systemPrompt,
     maxTokens: config.maxTokens,
     temperature: config.temperature,
+    maxRetries: config.maxRetries,
   });
 
   const checkpoint = new Checkpoint(projectRoot);

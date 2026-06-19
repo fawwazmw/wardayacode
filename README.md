@@ -75,6 +75,9 @@ wardayacode --model claude-sonnet-4-20250514 --provider anthropic
 wardayacode --mode auto        # approve everything automatically
 wardayacode --mode plan        # read-only, no file writes
 
+# Set max API retries (default: 3, exponential backoff)
+wardayacode --max-retries 5
+
 # Resume a previous session
 wardayacode sessions list
 wardayacode --resume <sessionId>
@@ -94,10 +97,11 @@ Type `/` in the TUI to open the command palette, or use these directly:
 |---------|-------------|
 | `/help` | Show all available commands |
 | `/clear` | Clear the conversation |
+| `/compact` | Manually compact context to free up token budget |
 | `/mode <mode>` | Switch permission mode |
 | `/model` | Show current model |
 | `/session` | Show session info |
-| `/tokens` | Show token usage |
+| `/tokens` | Show real token usage (from provider) |
 | `/undo` | Revert the last file change |
 | `/diff` | Show uncommitted git changes |
 | `/checkpoint` | Create a git stash checkpoint |
@@ -149,6 +153,7 @@ Create `.wardayacode.json` in your project root for project-level config, or `~/
   "permissionMode": "default",
   "maxTokens": 8192,
   "temperature": 0,
+  "maxRetries": 3,
   "theme": "dark"
 }
 ```

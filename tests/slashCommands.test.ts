@@ -15,6 +15,7 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     checkpoint: vi.fn().mockResolvedValue('Checkpoint created (git stash).'),
     rollback: vi.fn().mockResolvedValue('Rolled back to last checkpoint.'),
     diff: vi.fn().mockResolvedValue(' src/foo.ts | 2 +-'),
+    compact: vi.fn().mockResolvedValue('Context compacted: 2 layer(s) applied, ~1,234 tokens remaining.'),
     ...overrides,
   };
 }
@@ -195,5 +196,21 @@ describe('SLASH_COMMANDS registry', () => {
   it('/mode has args defined', () => {
     const mode = SLASH_COMMANDS.find(c => c.name === '/mode');
     expect(mode?.args).toBeDefined();
+  });
+
+  it('/compact is in SLASH_COMMANDS', () => {
+    const compact = SLASH_COMMANDS.find(c => c.name === '/compact');
+    expect(compact).toBeDefined();
+    expect(compact?.description).toBeTruthy();
+  });
+});
+
+describe('handleSlashCommand /compact', () => {
+  it('calls ctx.compact and returns output', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/compact', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.compact).toHaveBeenCalled();
+    expect(result.output).toContain('compacted');
   });
 });

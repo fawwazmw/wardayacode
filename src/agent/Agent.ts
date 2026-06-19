@@ -5,6 +5,7 @@ import type { ToolRegistry } from '../tools/ToolRegistry.js';
 import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { ToolResult } from '../types.js';
 import { logger } from '../utils/logger.js';
+import { isRetryableError, getRetryDelay, sleep } from '../utils/retry.js';
 
 export interface AgentConfig {
   model: LanguageModel;
@@ -14,6 +15,7 @@ export interface AgentConfig {
   maxTokens?: number;
   temperature?: number;
   maxSteps?: number;
+  maxRetries?: number;
 }
 
 export interface AgentEvents {
@@ -21,6 +23,8 @@ export interface AgentEvents {
   'tool-call-start': (payload: { toolName: string; args: Record<string, unknown> }) => void;
   'tool-call-result': (payload: { toolName: string; result: ToolResult }) => void;
   'error': (error: Error) => void;
+  'retry': (payload: { attempt: number; maxRetries: number; delayMs: number; error: string }) => void;
+  'usage': (payload: { promptTokens: number; completionTokens: number; totalTokens: number }) => void;
   'done': (payload: { text: string; steps: number }) => void;
 }
 
@@ -32,6 +36,7 @@ export class Agent extends EventEmitter<AgentEvents> {
   private readonly maxTokens: number;
   private readonly temperature: number;
   private readonly maxSteps: number;
+  private readonly maxRetries: number;
 
   constructor(config: AgentConfig) {
     super();
@@ -42,6 +47,7 @@ export class Agent extends EventEmitter<AgentEvents> {
     this.maxTokens = config.maxTokens ?? 4096;
     this.temperature = config.temperature ?? 0;
     this.maxSteps = config.maxSteps ?? 25;
+    this.maxRetries = config.maxRetries ?? 3;
   }
 
   private buildTools(): Record<string, CoreTool> {
@@ -166,48 +172,114 @@ export class Agent extends EventEmitter<AgentEvents> {
     allMessages.push(...messages);
 
     const tools = this.buildTools();
-    let fullText = '';
-    let stepCount = 0;
 
     logger.debug('agent run started', { messageCount: messages.length, model: String(this.model) });
 
-    try {
-      const result = streamText({
-        model: this.model,
-        messages: allMessages,
-        tools,
-        maxSteps: this.maxSteps,
-        maxTokens: this.maxTokens,
-        temperature: this.temperature,
-        onStepFinish: ({ stepType }) => {
-          if (stepType === 'tool-result') {
-            stepCount++;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      let fullText = '';
+      let stepCount = 0;
+      let outputEmitted = false;
+      let streamError: Error | null = null;
+
+      try {
+        const result = streamText({
+          model: this.model,
+          messages: allMessages,
+          tools,
+          maxSteps: this.maxSteps,
+          maxTokens: this.maxTokens,
+          temperature: this.temperature,
+          maxRetries: 0, // we handle retries ourselves
+          onStepFinish: ({ stepType }) => {
+            if (stepType === 'tool-result') {
+              stepCount++;
+            }
+          },
+        });
+
+        for await (const part of result.fullStream) {
+          switch (part.type) {
+            case 'text-delta':
+              fullText += part.textDelta;
+              outputEmitted = true;
+              this.emit('text-delta', part.textDelta);
+              break;
+            case 'tool-call':
+              outputEmitted = true;
+              break;
+            case 'error':
+              streamError = part.error instanceof Error ? part.error : new Error(String(part.error));
+              break;
           }
-        },
-      });
-
-      for await (const part of result.fullStream) {
-        switch (part.type) {
-          case 'text-delta':
-            fullText += part.textDelta;
-            this.emit('text-delta', part.textDelta);
-            break;
-          case 'tool-call':
-            break;
-          case 'error':
-            this.emit('error', part.error instanceof Error ? part.error : new Error(String(part.error)));
-            break;
         }
-      }
 
-      logger.debug('agent run done', { steps: stepCount, outputChars: fullText.length });
-      this.emit('done', { text: fullText, steps: stepCount });
-      return fullText;
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      logger.error('agent run failed', { error: err.message });
-      this.emit('error', err);
-      throw err;
+        if (streamError) {
+          throw streamError;
+        }
+
+        try {
+          const usage = await result.usage;
+          this.emit('usage', {
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+          });
+          logger.debug('token usage', { ...usage });
+        } catch {
+          // usage not available — skip
+        }
+
+        logger.debug('agent run done', { steps: stepCount, outputChars: fullText.length, attempt });
+        this.emit('done', { text: fullText, steps: stepCount });
+        return fullText;
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        lastError = err;
+
+        // Don't retry if output was already emitted (would duplicate)
+        if (outputEmitted) {
+          logger.error('agent run failed (output already emitted)', { error: err.message, attempt });
+          this.emit('error', err);
+          throw err;
+        }
+
+        // Don't retry if error is not retryable
+        if (!isRetryableError(err)) {
+          logger.error('agent run failed (not retryable)', { error: err.message, attempt });
+          this.emit('error', err);
+          throw err;
+        }
+
+        // Last attempt — give up
+        if (attempt === this.maxRetries) {
+          logger.error('agent run failed (max retries exceeded)', {
+            error: err.message,
+            attempts: attempt + 1,
+          });
+          this.emit('error', err);
+          throw err;
+        }
+
+        // Retry with backoff
+        const delayMs = getRetryDelay(err, attempt);
+        logger.warn('agent run retrying', {
+          attempt: attempt + 1,
+          maxRetries: this.maxRetries,
+          delayMs,
+          error: err.message,
+        });
+        this.emit('retry', {
+          attempt: attempt + 1,
+          maxRetries: this.maxRetries,
+          delayMs,
+          error: err.message,
+        });
+        await sleep(delayMs);
+      }
     }
+
+    throw lastError ?? new Error('Agent run failed for unknown reason');
   }
 }

@@ -11,6 +11,7 @@ export interface ProviderConfig {
   baseURL?: string;
   maxTokens?: number;
   temperature?: number;
+  maxRetries?: number;
 }
 
 /**

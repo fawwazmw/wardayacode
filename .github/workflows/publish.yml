@@ -32,9 +32,3 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Update release notes
-        run: |
-          VERSION="${GITHUB_REF_NAME}"
-          gh release edit "$VERSION" --generate-notes
-        env:
-          GH_TOKEN: ${{ github.token }}
