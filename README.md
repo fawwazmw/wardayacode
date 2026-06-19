@@ -75,6 +75,9 @@ wardayacode --model claude-sonnet-4-20250514 --provider anthropic
 wardayacode --mode auto        # approve everything automatically
 wardayacode --mode plan        # read-only, no file writes
 
+# Set max API retries (default: 3, exponential backoff)
+wardayacode --max-retries 5
+
 # Resume a previous session
 wardayacode sessions list
 wardayacode --resume <sessionId>
@@ -149,6 +152,7 @@ Create `.wardayacode.json` in your project root for project-level config, or `~/
   "permissionMode": "default",
   "maxTokens": 8192,
   "temperature": 0,
+  "maxRetries": 3,
   "theme": "dark"
 }
 ```

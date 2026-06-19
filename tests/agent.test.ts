@@ -24,6 +24,18 @@ describe('Agent', () => {
     expect(agent).toBeInstanceOf(Agent);
   });
 
+  it('accepts maxRetries in config', () => {
+    const mockModel = {} as any;
+    const agent = new Agent({
+      model: mockModel,
+      toolRegistry,
+      permissions,
+      maxRetries: 5,
+    });
+
+    expect(agent).toBeDefined();
+  });
+
   it('emits events', () => {
     const mockModel = {} as any;
     const agent = new Agent({
@@ -37,6 +49,27 @@ describe('Agent', () => {
 
     agent.emit('error', new Error('test'));
     expect(handler).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('emits retry events', () => {
+    const mockModel = {} as any;
+    const agent = new Agent({
+      model: mockModel,
+      toolRegistry,
+      permissions,
+      maxRetries: 3,
+    });
+
+    const handler = vi.fn();
+    agent.on('retry', handler);
+
+    agent.emit('retry', { attempt: 1, maxRetries: 3, delayMs: 1000, error: 'rate limited' });
+    expect(handler).toHaveBeenCalledWith({
+      attempt: 1,
+      maxRetries: 3,
+      delayMs: 1000,
+      error: 'rate limited',
+    });
   });
 
   it('builds tools from registry', () => {
