@@ -22,6 +22,9 @@ Thumbs.db
 # Sessions (local data)
 .wardayacode/
 
+# Local Claude Code settings
+.claude/settings.local.json
+
 # Coverage
 coverage/
 

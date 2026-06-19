@@ -24,6 +24,9 @@ import { SessionManager } from './session/SessionManager.js';
 import { Checkpoint } from './tools/Checkpoint.js';
 import { App } from './ui/App.js';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.js';
+import { getCurrentVersion } from './utils/version.js';
+import { checkForUpdates, fetchLatestVersion, isNewerVersion } from './utils/updateCheck.js';
+import { runSelfUpdate } from './utils/selfUpdate.js';
 import type { PermissionMode, ProviderName } from './types.js';
 
 const program = new Command();
@@ -31,7 +34,7 @@ const program = new Command();
 program
   .name('wardayacode')
   .description('AI-powered coding agent for the terminal')
-  .version('0.1.0');
+  .version(getCurrentVersion());
 
 // ─── Main command ─────────────────────────────────────────────────────────────
 
@@ -169,6 +172,35 @@ authCmd
     console.log();
   });
 
+// ─── Update subcommand ───────────────────────────────────────────────────────
+
+program
+  .command('update')
+  .description('Update wardayacode to the latest published version')
+  .action(async () => {
+    const current = getCurrentVersion();
+    const latest = await fetchLatestVersion();
+
+    if (latest && !isNewerVersion(latest, current)) {
+      console.log(chalk.green(`Already up to date (v${current}).`));
+      return;
+    }
+
+    const target = latest ? `v${current} → v${latest}` : 'latest';
+    console.log(chalk.cyan(`Updating wardayacode (${target})...\n`));
+
+    const ok = await runSelfUpdate();
+
+    if (ok) {
+      console.log(chalk.green('\nUpdate complete. Restart wardayacode to use the new version.'));
+    } else {
+      console.error(chalk.red('\nUpdate failed.'));
+      console.error(chalk.gray('Try updating manually: npm i -g wardayacode@latest'));
+      console.error(chalk.gray('If you hit a permissions error, your global install may need sudo.'));
+      process.exit(1);
+    }
+  });
+
 // ─── Core logic ───────────────────────────────────────────────────────────────
 
 interface CLIOptions {
@@ -236,10 +268,12 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   logger.init(session.getId());
   process.on('exit', () => logger.close());
 
+  const currentVersion = getCurrentVersion();
+
   if (options.tui !== false) {
-    runTUI(agent, session, config, undoManager, checkpoint, permissions, initialPrompt);
+    runTUI(agent, session, config, undoManager, checkpoint, permissions, currentVersion, initialPrompt);
   } else {
-    await runPlainText(agent, session, permissions, initialPrompt);
+    await runPlainText(agent, session, permissions, currentVersion, initialPrompt);
   }
 }
 
@@ -250,6 +284,7 @@ function runTUI(
   undoManager: UndoManager,
   checkpoint: Checkpoint,
   permissions: PermissionSystem,
+  version: string,
   initialPrompt?: string
 ): void {
   const { waitUntilExit } = render(
@@ -265,6 +300,7 @@ function runTUI(
         undoManager,
         checkpoint,
         permissions,
+        version,
         initialPrompt,
       })
     )
@@ -279,12 +315,21 @@ async function runPlainText(
   agent: Agent,
   session: Session,
   permissions: PermissionSystem,
+  version: string,
   initialPrompt?: string
 ): Promise<void> {
   if (!initialPrompt) {
     console.error(chalk.red('Error: prompt required in --no-tui mode'));
     console.error('Usage: wardayacode --no-tui "your prompt here"');
     process.exit(1);
+  }
+
+  const update = await checkForUpdates(version);
+  if (update?.updateAvailable) {
+    console.error(
+      chalk.yellow(`\nUpdate available: ${update.current} → ${update.latest}`) +
+        chalk.gray('\nRun: wardayacode update\n')
+    );
   }
 
   let interrupted = false;
