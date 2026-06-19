@@ -134,7 +134,7 @@ export function WelcomeScreen({
                 Update available: v{version} → v{latestVersion}
               </Text>
               <Text color={dimColor}>
-                Run <Text color={keyColor}>npm i -g wardayacode@latest</Text>
+                Run <Text color={keyColor}>wardayacode update</Text>
               </Text>
             </Box>
           )}
