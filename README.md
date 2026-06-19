@@ -97,10 +97,11 @@ Type `/` in the TUI to open the command palette, or use these directly:
 |---------|-------------|
 | `/help` | Show all available commands |
 | `/clear` | Clear the conversation |
+| `/compact` | Manually compact context to free up token budget |
 | `/mode <mode>` | Switch permission mode |
 | `/model` | Show current model |
 | `/session` | Show session info |
-| `/tokens` | Show token usage |
+| `/tokens` | Show real token usage (from provider) |
 | `/undo` | Revert the last file change |
 | `/diff` | Show uncommitted git changes |
 | `/checkpoint` | Create a git stash checkpoint |

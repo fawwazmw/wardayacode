@@ -24,6 +24,7 @@ export interface AgentEvents {
   'tool-call-result': (payload: { toolName: string; result: ToolResult }) => void;
   'error': (error: Error) => void;
   'retry': (payload: { attempt: number; maxRetries: number; delayMs: number; error: string }) => void;
+  'usage': (payload: { promptTokens: number; completionTokens: number; totalTokens: number }) => void;
   'done': (payload: { text: string; steps: number }) => void;
 }
 
@@ -216,6 +217,18 @@ export class Agent extends EventEmitter<AgentEvents> {
 
         if (streamError) {
           throw streamError;
+        }
+
+        try {
+          const usage = await result.usage;
+          this.emit('usage', {
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+          });
+          logger.debug('token usage', { ...usage });
+        } catch {
+          // usage not available — skip
         }
 
         logger.debug('agent run done', { steps: stepCount, outputChars: fullText.length, attempt });
