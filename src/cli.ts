@@ -258,6 +258,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     maxTokens: config.maxTokens,
     temperature: config.temperature,
     maxRetries: config.maxRetries,
+    cwd: projectRoot,
   });
 
   const checkpoint = new Checkpoint(projectRoot);

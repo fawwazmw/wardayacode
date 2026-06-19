@@ -282,11 +282,13 @@ export function App({
     agent.on('retry', retryHandler);
     agent.on('usage', usageHandler);
 
+    const startedAt = Date.now();
     try {
       const response = await agent.run(newHistory);
+      const durationMs = Date.now() - startedAt;
 
       setStreamingText('');
-      setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response }]);
+      setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response, durationMs }]);
       ctx.addCoreMessage('assistant', response);
 
       await session.append({

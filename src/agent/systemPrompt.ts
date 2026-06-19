@@ -11,6 +11,18 @@ Environment:
 - Platform: ${process.platform}
 - Node.js: ${process.version}
 
+CRITICAL — working directory:
+- The working directory is EXACTLY: ${cwd}
+- This is the absolute project root. All relative paths resolve against it.
+- NEVER reference, guess, or invent any other location. Do not emit paths like
+  "/Users/...", "/workspace/...", "/home/user/...", or any sandbox-style path
+  that is not the working directory above — those are not real on this machine.
+- If you are unsure of the current location or what files exist, call the
+  list_files tool with NO path argument to inspect the working directory. Do not
+  state a path from memory.
+- When you mention the project location to the user, use the working directory
+  above verbatim.
+
 ${projectContext}
 
 You have access to tools for reading, writing, editing files, running shell commands, and searching the codebase. Use them proactively to understand context before making changes.

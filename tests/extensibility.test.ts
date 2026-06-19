@@ -263,6 +263,15 @@ describe('buildSystemPrompt()', () => {
     expect(prompt).toContain('write_file');
     expect(prompt).toContain('edit_file');
   });
+
+  it('emphatically pins the working directory to discourage path hallucination', async () => {
+    const prompt = await buildSystemPrompt('/home/user/realproject');
+    // The exact cwd must appear in the emphatic directive, not just the header.
+    expect(prompt).toContain('EXACTLY: /home/user/realproject');
+    // It must explicitly warn against inventing sandbox-style paths.
+    expect(prompt).toContain('/workspace/');
+    expect(prompt).toContain('list_files');
+  });
 });
 
 // ── UndoManager (uncovered methods) ──────────────────────────────────────────
