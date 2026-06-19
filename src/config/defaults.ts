@@ -14,6 +14,7 @@ export interface WardayaCodeConfig {
   theme: 'dark' | 'light';
   sessionDir: string;
   systemPrompt?: string;
+  maxRetries: number;
 }
 
 export const DEFAULT_CONFIG: WardayaCodeConfig = {
@@ -25,4 +26,5 @@ export const DEFAULT_CONFIG: WardayaCodeConfig = {
   permissionMode: 'default',
   theme: 'dark',
   sessionDir: path.join(os.homedir(), '.config', 'wardayacode', 'sessions'),
+  maxRetries: 3,
 };

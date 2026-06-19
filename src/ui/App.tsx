@@ -239,9 +239,15 @@ export function App({
       });
     };
 
+    const retryHandler = ({ attempt, maxRetries, delayMs, error }: { attempt: number; maxRetries: number; delayMs: number; error: string }) => {
+      const delaySec = (delayMs / 1000).toFixed(1);
+      addSystemMessage(`Retrying (attempt ${attempt + 1}/${maxRetries + 1}) in ${delaySec}s — ${error}`);
+    };
+
     agent.on('text-delta', textDeltaHandler);
     agent.on('tool-call-start', toolCallStartHandler);
     agent.on('tool-call-result', toolCallResultHandler);
+    agent.on('retry', retryHandler);
 
     try {
       const response = await agent.run(newHistory);
@@ -272,6 +278,7 @@ export function App({
       agent.off('text-delta', textDeltaHandler);
       agent.off('tool-call-start', toolCallStartHandler);
       agent.off('tool-call-result', toolCallResultHandler);
+      agent.off('retry', retryHandler);
       abortRef.current = null;
       setIsLoading(false);
     }
