@@ -1,7 +1,8 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import type { LanguageModel } from 'ai';
+import { wrapLanguageModel, type LanguageModel } from 'ai';
 import type { ProviderConfig } from './index.js';
 import { resolveProviderApiKey } from './providerAuth.js';
+import { stripReasoningMiddleware } from './stripReasoningMiddleware.js';
 
 export function createAnthropicProvider(config: ProviderConfig): LanguageModel {
   const anthropic = createAnthropic({
@@ -9,5 +10,8 @@ export function createAnthropicProvider(config: ProviderConfig): LanguageModel {
     ...(config.baseURL ? { baseURL: config.baseURL } : {}),
   });
 
-  return anthropic(config.model);
+  return wrapLanguageModel({
+    model: anthropic(config.model),
+    middleware: stripReasoningMiddleware,
+  });
 }
