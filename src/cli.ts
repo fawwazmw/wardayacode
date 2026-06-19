@@ -236,6 +236,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     model: config.model,
     apiKey: config.apiKey,
     apiKeys: config.apiKeys,
+    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
     maxTokens: config.maxTokens,
     temperature: config.temperature,
   });
