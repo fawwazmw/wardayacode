@@ -13,6 +13,7 @@ import { StatusBar } from './StatusBar.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
 import { handleSlashCommand } from './SlashCommands.js';
 import { WelcomeScreen } from './components/WelcomeScreen.js';
+import { checkForUpdates, type UpdateInfo } from '../utils/updateCheck.js';
 import {
   clearProviderApiKey,
   isAuthProvider,
@@ -29,6 +30,7 @@ interface AppProps {
   undoManager: UndoManager;
   checkpoint: Checkpoint;
   permissions: PermissionSystem;
+  version: string;
   initialPrompt?: string;
 }
 
@@ -48,6 +50,7 @@ export function App({
   undoManager,
   checkpoint,
   permissions,
+  version,
   initialPrompt,
 }: AppProps): React.ReactElement {
   const { exit } = useApp();
@@ -55,6 +58,7 @@ export function App({
   const [streamingText, setStreamingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tokenUsage, setTokenUsage] = useState({ input: 0, output: 0 });
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const contextManagerRef = useRef<ContextManager>(new ContextManager(process.cwd()));
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
@@ -63,6 +67,20 @@ export function App({
   const addSystemMessage = useCallback((content: string) => {
     setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: `ℹ ${content}` }]);
   }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    checkForUpdates(version)
+      .then((info) => {
+        if (!cancelled) setUpdateInfo(info);
+      })
+      .catch(() => {
+        /* update check failures are non-fatal */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
 
   React.useEffect(() => {
     permissions.setPromptHandler(async (toolName, args, reason) => {
@@ -312,7 +330,9 @@ export function App({
           sessionId={session.getId()}
           cwd={process.cwd()}
           themeMode={themeMode}
-          version="0.1.0"
+          version={version}
+          latestVersion={updateInfo?.latest}
+          updateAvailable={updateInfo?.updateAvailable ?? false}
         />
       ) : (
         <ChatView

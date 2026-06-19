@@ -33,6 +33,8 @@ interface WelcomeScreenProps {
   cwd: string;
   themeMode: "dark" | "light";
   version: string;
+  latestVersion?: string;
+  updateAvailable?: boolean;
 }
 
 export function WelcomeScreen({
@@ -42,6 +44,8 @@ export function WelcomeScreen({
   cwd,
   themeMode,
   version,
+  latestVersion,
+  updateAvailable = false,
 }: WelcomeScreenProps): React.ReactElement {
   const isDark = themeMode === "dark";
   const mutedColor = isDark ? "#555555" : "#AAAAAA";
@@ -51,6 +55,7 @@ export function WelcomeScreen({
   const cmdColor = isDark ? "#C084FC" : "#9333EA";
   const wardayaColor = isDark ? "#60A5FA" : "#2563EB";
   const codeColor = isDark ? "#C084FC" : "#9333EA";
+  const updateColor = isDark ? "#FBBF24" : "#D97706";
 
   const [phase, setPhase] = useState<"glow" | "info" | "ready">("glow");
   const [tipIdx, setTipIdx] = useState(0);
@@ -123,6 +128,16 @@ export function WelcomeScreen({
             <Text color={modeColor}>{permissionMode}</Text>
           </Box>
           <Text color={dimColor}>{shortCwd}</Text>
+          {updateAvailable && latestVersion && (
+            <Box marginTop={1} flexDirection="column" alignItems="center">
+              <Text color={updateColor}>
+                Update available: v{version} → v{latestVersion}
+              </Text>
+              <Text color={dimColor}>
+                Run <Text color={keyColor}>npm i -g wardayacode@latest</Text>
+              </Text>
+            </Box>
+          )}
         </Box>
       )}
 

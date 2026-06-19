@@ -24,6 +24,8 @@ import { SessionManager } from './session/SessionManager.js';
 import { Checkpoint } from './tools/Checkpoint.js';
 import { App } from './ui/App.js';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.js';
+import { getCurrentVersion } from './utils/version.js';
+import { checkForUpdates } from './utils/updateCheck.js';
 import type { PermissionMode, ProviderName } from './types.js';
 
 const program = new Command();
@@ -31,7 +33,7 @@ const program = new Command();
 program
   .name('wardayacode')
   .description('AI-powered coding agent for the terminal')
-  .version('0.1.0');
+  .version(getCurrentVersion());
 
 // ─── Main command ─────────────────────────────────────────────────────────────
 
@@ -236,10 +238,12 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   logger.init(session.getId());
   process.on('exit', () => logger.close());
 
+  const currentVersion = getCurrentVersion();
+
   if (options.tui !== false) {
-    runTUI(agent, session, config, undoManager, checkpoint, permissions, initialPrompt);
+    runTUI(agent, session, config, undoManager, checkpoint, permissions, currentVersion, initialPrompt);
   } else {
-    await runPlainText(agent, session, permissions, initialPrompt);
+    await runPlainText(agent, session, permissions, currentVersion, initialPrompt);
   }
 }
 
@@ -250,6 +254,7 @@ function runTUI(
   undoManager: UndoManager,
   checkpoint: Checkpoint,
   permissions: PermissionSystem,
+  version: string,
   initialPrompt?: string
 ): void {
   const { waitUntilExit } = render(
@@ -265,6 +270,7 @@ function runTUI(
         undoManager,
         checkpoint,
         permissions,
+        version,
         initialPrompt,
       })
     )
@@ -279,12 +285,21 @@ async function runPlainText(
   agent: Agent,
   session: Session,
   permissions: PermissionSystem,
+  version: string,
   initialPrompt?: string
 ): Promise<void> {
   if (!initialPrompt) {
     console.error(chalk.red('Error: prompt required in --no-tui mode'));
     console.error('Usage: wardayacode --no-tui "your prompt here"');
     process.exit(1);
+  }
+
+  const update = await checkForUpdates(version);
+  if (update?.updateAvailable) {
+    console.error(
+      chalk.yellow(`\nUpdate available: ${update.current} → ${update.latest}`) +
+        chalk.gray('\nRun: npm i -g wardayacode@latest\n')
+    );
   }
 
   let interrupted = false;
