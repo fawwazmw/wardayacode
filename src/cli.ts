@@ -25,7 +25,8 @@ import { Checkpoint } from './tools/Checkpoint.js';
 import { App } from './ui/App.js';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.js';
 import { getCurrentVersion } from './utils/version.js';
-import { checkForUpdates } from './utils/updateCheck.js';
+import { checkForUpdates, fetchLatestVersion, isNewerVersion } from './utils/updateCheck.js';
+import { runSelfUpdate } from './utils/selfUpdate.js';
 import type { PermissionMode, ProviderName } from './types.js';
 
 const program = new Command();
@@ -171,6 +172,35 @@ authCmd
     console.log();
   });
 
+// ─── Update subcommand ───────────────────────────────────────────────────────
+
+program
+  .command('update')
+  .description('Update wardayacode to the latest published version')
+  .action(async () => {
+    const current = getCurrentVersion();
+    const latest = await fetchLatestVersion();
+
+    if (latest && !isNewerVersion(latest, current)) {
+      console.log(chalk.green(`Already up to date (v${current}).`));
+      return;
+    }
+
+    const target = latest ? `v${current} → v${latest}` : 'latest';
+    console.log(chalk.cyan(`Updating wardayacode (${target})...\n`));
+
+    const ok = await runSelfUpdate();
+
+    if (ok) {
+      console.log(chalk.green('\nUpdate complete. Restart wardayacode to use the new version.'));
+    } else {
+      console.error(chalk.red('\nUpdate failed.'));
+      console.error(chalk.gray('Try updating manually: npm i -g wardayacode@latest'));
+      console.error(chalk.gray('If you hit a permissions error, your global install may need sudo.'));
+      process.exit(1);
+    }
+  });
+
 // ─── Core logic ───────────────────────────────────────────────────────────────
 
 interface CLIOptions {
@@ -298,7 +328,7 @@ async function runPlainText(
   if (update?.updateAvailable) {
     console.error(
       chalk.yellow(`\nUpdate available: ${update.current} → ${update.latest}`) +
-        chalk.gray('\nRun: npm i -g wardayacode@latest\n')
+        chalk.gray('\nRun: wardayacode update\n')
     );
   }
 
