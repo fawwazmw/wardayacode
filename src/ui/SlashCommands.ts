@@ -9,6 +9,7 @@ export interface SlashCommandEntry {
 export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/help', description: 'Show available commands' },
   { name: '/clear', description: 'Clear chat history' },
+  { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
   { name: '/mode', description: 'Change permission mode', args: '<mode>' },
   { name: '/model', description: 'Show current model' },
@@ -43,6 +44,7 @@ export interface SlashCommandContext {
   checkpoint: () => Promise<string>;
   rollback: () => Promise<string>;
   diff: () => Promise<string>;
+  compact: () => Promise<string>;
 }
 
 export interface SlashCommandResult {
@@ -82,6 +84,9 @@ export async function handleSlashCommand(
     case '/clear':
       ctx.clearMessages();
       return { handled: true, output: 'Chat cleared.' };
+
+    case '/compact':
+      return { handled: true, output: await ctx.compact() };
 
     case '/session':
       return {

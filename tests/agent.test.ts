@@ -72,6 +72,25 @@ describe('Agent', () => {
     });
   });
 
+  it('emits usage events', () => {
+    const mockModel = {} as any;
+    const agent = new Agent({
+      model: mockModel,
+      toolRegistry,
+      permissions,
+    });
+
+    const handler = vi.fn();
+    agent.on('usage', handler);
+
+    agent.emit('usage', { promptTokens: 100, completionTokens: 50, totalTokens: 150 });
+    expect(handler).toHaveBeenCalledWith({
+      promptTokens: 100,
+      completionTokens: 50,
+      totalTokens: 150,
+    });
+  });
+
   it('builds tools from registry', () => {
     const mockModel = {} as any;
     const agent = new Agent({
