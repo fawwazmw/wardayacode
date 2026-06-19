@@ -1,7 +1,8 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import type { LanguageModel } from 'ai';
+import { wrapLanguageModel, type LanguageModel } from 'ai';
 import type { ProviderConfig } from './index.js';
 import { resolveProviderApiKey } from './providerAuth.js';
+import { stripReasoningMiddleware } from './stripReasoningMiddleware.js';
 
 export function createGoogleProvider(config: ProviderConfig): LanguageModel {
   const google = createGoogleGenerativeAI({
@@ -9,5 +10,8 @@ export function createGoogleProvider(config: ProviderConfig): LanguageModel {
     ...(config.baseURL ? { baseURL: config.baseURL } : {}),
   });
 
-  return google(config.model);
+  return wrapLanguageModel({
+    model: google(config.model),
+    middleware: stripReasoningMiddleware,
+  });
 }
