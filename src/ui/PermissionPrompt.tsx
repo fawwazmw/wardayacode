@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { inkColors } from './theme.js';
+import { normalizeKittyKeys } from './kittyKeyboard.js';
 
 interface PermissionPromptProps {
   toolName: string;
@@ -29,8 +30,9 @@ export function PermissionPrompt({
   const colors = inkColors[themeMode];
   const [answered, setAnswered] = useState(false);
 
-  useInput((input, key) => {
+  useInput((rawInput, rawKey) => {
     if (answered) return;
+    const { input, key } = normalizeKittyKeys(rawInput, rawKey);
     const lower = input.toLowerCase();
     if (lower === 'y' || key.return) {
       setAnswered(true);

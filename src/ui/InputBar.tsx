@@ -4,6 +4,7 @@ import { inkColors } from './theme.js';
 import { CommandPalette } from './CommandPalette.js';
 import { filterCommands } from './SlashCommands.js';
 import { Spinner } from './components/Spinner.js';
+import { normalizeKittyKeys } from './kittyKeyboard.js';
 import figures from 'figures';
 
 interface InputBarProps {
@@ -72,7 +73,12 @@ export function InputBar({
     setPaletteIndex(0);
   }, [value, onSubmit]);
 
-  useInput((input, key) => {
+  useInput((rawInput, rawKey) => {
+    // Under the kitty keyboard protocol, Shift+Enter and lone Esc arrive as
+    // CSI-u sequences Ink can't parse; map them back to Ink's Key shape so the
+    // branches below keep working unchanged.
+    const { input, key } = normalizeKittyKeys(rawInput, rawKey);
+
     if (key.ctrl && input === 'c') {
       if (isLoading && onInterrupt) {
         onInterrupt();
