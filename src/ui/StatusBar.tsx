@@ -46,7 +46,7 @@ export function StatusBar({
       <Box gap={1}>
         {total > 0 && (
           <>
-            <Text color={dim}>{fmtTokens(tokenUsage.input)}↑{fmtTokens(tokenUsage.output)}↓</Text>
+            <Text color={dim}>{fmtTokens(total)} tokens</Text>
             <Text color={sep}>│</Text>
           </>
         )}

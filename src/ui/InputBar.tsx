@@ -46,6 +46,13 @@ export function InputBar({
     setPaletteIndex(0);
   }, []);
 
+  const insertNewline = useCallback(() => {
+    const newVal = value.slice(0, cursorPos) + '\n' + value.slice(cursorPos);
+    setValue(newVal);
+    setCursorPos(cursorPos + 1);
+    setPaletteIndex(0);
+  }, [value, cursorPos]);
+
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim();
     if (trimmed.length === 0) return;
@@ -84,6 +91,13 @@ export function InputBar({
       return;
     }
 
+    // Esc interrupts the running agent. Checked before the isLoading guard
+    // below, since that guard otherwise swallows all keys while loading.
+    if (key.escape && isLoading && onInterrupt) {
+      onInterrupt();
+      return;
+    }
+
     if (isLoading) return;
 
     if (key.escape) {
@@ -100,6 +114,15 @@ export function InputBar({
       if (selected) {
         applyCompletion(selected.name);
       }
+      return;
+    }
+
+    // Newline (multi-line input) without submitting. Ctrl+J reliably arrives as
+    // input '\n' in every terminal; Shift+Enter only sends a distinct modifier
+    // on terminals that support it (many send a bare '\r', indistinguishable
+    // from Enter) — honor it when present.
+    if (input === '\n' || (key.return && key.shift)) {
+      insertNewline();
       return;
     }
 
