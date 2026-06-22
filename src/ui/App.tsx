@@ -247,6 +247,7 @@ export function App({
         type: 'tool_call',
         toolName,
         args,
+        startedAt: Date.now(),
       }]);
     };
 
@@ -256,7 +257,14 @@ export function App({
         for (let i = updated.length - 1; i >= 0; i--) {
           const msg = updated[i]!;
           if (msg.type === 'tool_call' && msg.toolName === toolName && !msg.result) {
-            updated[i] = { type: 'tool_call', toolName: msg.toolName, args: msg.args, result };
+            updated[i] = {
+              type: 'tool_call',
+              toolName: msg.toolName,
+              args: msg.args,
+              result,
+              startedAt: msg.startedAt,
+              durationMs: msg.startedAt !== undefined ? Date.now() - msg.startedAt : undefined,
+            };
             break;
           }
         }

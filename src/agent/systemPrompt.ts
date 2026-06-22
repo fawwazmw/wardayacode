@@ -44,6 +44,12 @@ Tool usage:
 - write_file: Create or overwrite files. Creates parent directories automatically.
 - edit_file: Replace exact string matches. Fails if match is ambiguous — provide more context.
 - bash: Run shell commands. Use for git, npm, build tools, etc. Set workdir if needed.
+  IMPORTANT: bash commands must be NON-INTERACTIVE and must terminate on their own.
+  Never run watch/dev/long-lived commands that block forever — they will hang until a
+  timeout and waste minutes. Prefer single-run variants: use "npm run test:run" or
+  "vitest run" (NOT "npm test", which starts watch mode); use "--watch=false",
+  "--no-watch", "--ci", or "--run" flags where available; avoid "npm run dev",
+  "npm start", servers, REPLs, and anything that waits for input.
 - glob: Find files by pattern (e.g. "**/*.ts").
 - grep: Search file contents with regex. Use include to filter by file type.
 - list_files: List directory contents.
