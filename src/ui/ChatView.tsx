@@ -24,18 +24,24 @@ interface TextMessage {
   durationMs?: number;
 }
 
-interface ToolOutputMessage {
-  type: 'tool_output';
+export type ChatMessage = TextMessage | ToolCallMessage;
+
+/** The full, verbatim output of one tool call, toggled in/out via ctrl+o. */
+export interface ExpandedOutput {
   toolName: string;
   content: string;
 }
-
-export type ChatMessage = TextMessage | ToolCallMessage | ToolOutputMessage;
 
 interface ChatViewProps {
   messages: ChatMessage[];
   streamingText: string;
   themeMode: 'dark' | 'light';
+  /**
+   * When set, the full output of a tool call is shown in the live region below
+   * the transcript. It lives here (not in <Static>) so ctrl+o can toggle it
+   * back off — committed scrollback can't be un-drawn.
+   */
+  expandedOutput?: ExpandedOutput | null;
 }
 
 /** True for a tool call that has not yet produced a result (still running). */
@@ -63,17 +69,6 @@ function MessageItem({
         durationMs={msg.durationMs}
         themeMode={themeMode}
       />
-    );
-  }
-
-  if (msg.type === 'tool_output') {
-    // A full, verbatim reprint of a tool's output (triggered by ctrl+o). No
-    // markdown, no truncation — it flows into native scrollback like a log.
-    return (
-      <Box flexDirection="column" marginY={1} marginLeft={1}>
-        <Text color={colors.muted} dimColor>{`⤷ ${msg.toolName} (full output)`}</Text>
-        <Text color={colors.muted} wrap="wrap">{msg.content}</Text>
-      </Box>
     );
   }
 
@@ -144,14 +139,15 @@ export function ChatView({
   messages,
   streamingText,
   themeMode,
+  expandedOutput,
 }: ChatViewProps): React.ReactElement {
   const colors = inkColors[themeMode];
 
   // Settled messages are committed to <Static>, which writes them once to the
   // terminal and lets them flow into native scrollback. This is what makes a
-  // tall transcript (e.g. expanded tool output) scroll normally instead of
-  // fighting Ink's in-place frame eraser. In-progress tool calls stay in the
-  // dynamic tail below so their spinner/elapsed timer can keep updating.
+  // tall transcript scroll normally instead of fighting Ink's in-place frame
+  // eraser. In-progress tool calls stay in the dynamic tail below so their
+  // spinner/elapsed timer can keep updating.
   const settled = messages.filter(msg => !isInProgress(msg));
   const inProgress = messages.filter(isInProgress);
 
@@ -173,6 +169,15 @@ export function ChatView({
       {inProgress.map((msg, idx) => (
         <MessageItem key={`progress-${idx}`} msg={msg} themeMode={themeMode} />
       ))}
+
+      {expandedOutput && (
+        <Box flexDirection="column" marginY={1} marginLeft={1}>
+          <Text color={colors.muted} dimColor>
+            {`⤷ ${expandedOutput.toolName} (full output) · ctrl+o to collapse`}
+          </Text>
+          <Text color={colors.muted} wrap="wrap">{expandedOutput.content}</Text>
+        </Box>
+      )}
 
       {streamingText.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
