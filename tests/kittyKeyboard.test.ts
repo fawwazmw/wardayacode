@@ -79,6 +79,31 @@ describe('normalizeKittyKeys', () => {
     expect(key.escape).toBe(true);
   });
 
+  it('maps Ctrl+J (CSI 106;5u) back to a newline so multi-line input still works', () => {
+    const { input, key } = normalizeKittyKeys('[106;5u', emptyKey());
+    expect(input).toBe('\n');
+    expect(key.ctrl).toBe(true);
+  });
+
+  it('handles Ctrl+J reported with lock-key bits set (CSI 106;133u)', () => {
+    // 133 - 1 = 132 = caps_lock(128) | ctrl(4); only the ctrl bit should matter.
+    const { input, key } = normalizeKittyKeys('[106;133u', emptyKey());
+    expect(input).toBe('\n');
+    expect(key.ctrl).toBe(true);
+  });
+
+  it('reconstructs other Ctrl+letter combos (Ctrl+A → input "a", ctrl set)', () => {
+    const { input, key } = normalizeKittyKeys('[97;5u', emptyKey());
+    expect(input).toBe('a');
+    expect(key.ctrl).toBe(true);
+  });
+
+  it('ignores sub-field segments in CSI-u (CSI 97;5:1u)', () => {
+    const { input, key } = normalizeKittyKeys('[97;5:1u', emptyKey());
+    expect(input).toBe('a');
+    expect(key.ctrl).toBe(true);
+  });
+
   it('passes ordinary printable input through untouched', () => {
     const k = emptyKey();
     const { input, key } = normalizeKittyKeys('a', k);
