@@ -75,19 +75,49 @@ export function normalizeKittyKeys(
   input: string,
   key: Key,
 ): { input: string; key: Key } {
-  // Modified Enter: `\x1b[13;<mods>u`. Surface it as Enter+Shift so the existing
-  // newline branch (`key.return && key.shift`) fires. mods: 2=shift, 3=alt,
-  // 5=ctrl (kitty encodes mods as bitmask+1); we only care that it's modified.
-  const enterMatch = /^\[13(?:;(\d+))?u$/.exec(input);
-  if (enterMatch) {
-    const mods = enterMatch[1] ? parseInt(enterMatch[1], 10) : 1;
-    const isShift = ((mods - 1) & 0b1) === 1;
+  // CSI-u form: `\x1b[<codepoint>;<modifiers>u`, optionally with `:`-separated
+  // sub-fields (e.g. alternate keycodes, event type). Ink strips the ESC, so we
+  // see `[<codepoint>;<modifiers>u`. Parse the leading numbers of each field.
+  const csiU = /^\[(\d+)(?::\d+)*(?:;(\d+)(?::\d+)*)?u$/.exec(input);
+  if (!csiU) return { input, key };
+
+  const codepoint = parseInt(csiU[1]!, 10);
+  // Kitty encodes modifiers as bitmask + 1: shift=1, alt=2, ctrl=4, super=8.
+  // Lock keys (num_lock=64, caps_lock=128) also land here, so mask the bits we
+  // care about rather than matching the field exactly.
+  const bitmask = csiU[2] ? parseInt(csiU[2], 10) - 1 : 0;
+  const isShift = (bitmask & 0b0001) !== 0;
+  const isAlt = (bitmask & 0b0010) !== 0;
+  const isCtrl = (bitmask & 0b0100) !== 0;
+  const isSuper = (bitmask & 0b1000) !== 0;
+
+  // Enter (13): surface as Enter so the submit / newline branches fire. Shift or
+  // any modifier means "newline, don't submit" — we map shift through so the
+  // existing `key.return && key.shift` branch handles it.
+  if (codepoint === 13) {
     return { input: '', key: { ...key, return: true, shift: isShift } };
   }
 
-  // Lone Esc reports as `\x1b[27u` (or `\x1b[27;<mods>u`) once the protocol is on.
-  if (/^\[27(?:;\d+)?u$/.test(input)) {
+  // Lone Esc reports as `\x1b[27u` once the protocol is on.
+  if (codepoint === 27) {
     return { input: '', key: { ...key, escape: true } };
+  }
+
+  // Ctrl+letter combos get disambiguated to CSI-u under the protocol (their
+  // legacy C0 codes collide with named keys — Ctrl+J with line feed, etc.).
+  // Reconstruct them so the UI's `key.ctrl && input === 'x'` branches keep
+  // working. a–z arrive as their lowercase codepoint regardless of shift.
+  if (isCtrl && codepoint >= 97 && codepoint <= 122) {
+    const letter = String.fromCharCode(codepoint);
+    // Ctrl+J is the multi-line newline shortcut; emit '\n' so the newline branch
+    // (`input === '\n'`) fires the same way it does on non-protocol terminals.
+    if (letter === 'j') {
+      return { input: '\n', key: { ...key, ctrl: true } };
+    }
+    return {
+      input: letter,
+      key: { ...key, ctrl: true, shift: isShift, meta: isAlt || isSuper },
+    };
   }
 
   return { input, key };
