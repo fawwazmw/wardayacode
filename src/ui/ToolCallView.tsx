@@ -3,6 +3,10 @@ import { Box, Text } from 'ink';
 import { inkColors } from './theme.js';
 import { Spinner } from './components/Spinner.js';
 import { formatDuration } from '../utils/formatDuration.js';
+import { previewToolOutput } from '../utils/toolOutputPreview.js';
+
+/** How many lines of a tool's output to show before collapsing the rest. */
+const PREVIEW_LINES = 4;
 
 interface ToolCallViewProps {
   toolName: string;
@@ -54,6 +58,16 @@ export function ToolCallView({
     ? result.success ? colors.success : colors.error
     : colors.warning;
 
+  // Collapsed preview of the tool's output: stdout on success, the error text
+  // on failure. Rendered under a `⎿` connector, capped at PREVIEW_LINES.
+  const outputText = result
+    ? result.success
+      ? result.content ?? ''
+      : result.error ?? result.content ?? ''
+    : '';
+  const preview = previewToolOutput(outputText, PREVIEW_LINES);
+  const outputColor = result && !result.success ? colors.error : colors.muted;
+
   return (
     <Box flexDirection="column" marginBottom={0} marginLeft={1}>
       <Box gap={1}>
@@ -71,9 +85,22 @@ export function ToolCallView({
           <Text color={colors.muted} dimColor>{formatDuration(durationMs)}</Text>
         )}
       </Box>
-      {result && !result.success && result.error && (
-        <Box marginLeft={3}>
-          <Text color={colors.error} dimColor wrap="wrap">{result.error.slice(0, 200)}</Text>
+      {result && preview.lines.length > 0 && (
+        <Box flexDirection="column" marginLeft={2}>
+          {preview.lines.map((line, i) => (
+            <Box key={i} gap={1}>
+              <Text color={colors.muted} dimColor>{i === 0 ? '⎿' : ' '}</Text>
+              <Box flexGrow={1}>
+                <Text color={outputColor} dimColor wrap="wrap">{line || ' '}</Text>
+              </Box>
+            </Box>
+          ))}
+          {preview.hiddenCount > 0 && (
+            <Box gap={1}>
+              <Text color={colors.muted} dimColor> </Text>
+              <Text color={colors.muted} dimColor>{`… +${preview.hiddenCount} lines (ctrl+o to expand)`}</Text>
+            </Box>
+          )}
         </Box>
       )}
     </Box>

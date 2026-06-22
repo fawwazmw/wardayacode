@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Box, useApp } from 'ink';
+import { Box, useApp, useInput } from 'ink';
 import type { Agent } from '../agent/index.js';
 import type { Session } from '../session/Session.js';
 import type { PermissionMode } from '../types.js';
@@ -63,6 +63,28 @@ export function App({
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Ctrl+O reprints the most recent tool call's full output as a new log entry.
+  // We append rather than expand-in-place: settled messages live in <Static>
+  // (native scrollback), which can't be re-collapsed, so a one-way "print full
+  // output" is both correct for that model and scrolls like normal CLI output.
+  useInput((input, key) => {
+    if (key.ctrl && input === 'o') {
+      setMessages(prev => {
+        for (let i = prev.length - 1; i >= 0; i--) {
+          const msg = prev[i]!;
+          if (msg.type === 'tool_call' && msg.result) {
+            const content = msg.result.success
+              ? msg.result.content ?? ''
+              : msg.result.error ?? msg.result.content ?? '';
+            if (content.trim() === '') return prev;
+            return [...prev, { type: 'tool_output', toolName: msg.toolName, content }];
+          }
+        }
+        return prev;
+      });
+    }
+  });
 
   const addSystemMessage = useCallback((content: string) => {
     setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: `ℹ ${content}` }]);
