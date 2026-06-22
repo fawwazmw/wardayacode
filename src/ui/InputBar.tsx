@@ -3,6 +3,7 @@ import { Box, Text, useInput, useApp } from 'ink';
 import { inkColors } from './theme.js';
 import { CommandPalette } from './CommandPalette.js';
 import { filterCommands } from './SlashCommands.js';
+import { Spinner } from './components/Spinner.js';
 import figures from 'figures';
 
 interface InputBarProps {
@@ -228,17 +229,17 @@ export function InputBar({
         />
       )}
       <Box paddingX={1} gap={1}>
-        <Text color={colors.accent}>
-          {isLoading ? figures.ellipsis : figures.pointer}
-        </Text>
         {isLoading ? (
-          <Text color={colors.muted} dimColor>Thinking...</Text>
+          <Spinner label="Thinking..." color={colors.accent} />
         ) : (
-          <Text>
-            <Text color={colors.user}>{beforeCursor}</Text>
-            <Text color={colors.accent}>▌</Text>
-            <Text color={colors.user}>{afterCursor}</Text>
-          </Text>
+          <>
+            <Text color={colors.accent}>{figures.pointer}</Text>
+            <Text>
+              <Text color={colors.user}>{beforeCursor}</Text>
+              <Text color={colors.accent}>▌</Text>
+              <Text color={colors.user}>{afterCursor}</Text>
+            </Text>
+          </>
         )}
       </Box>
     </Box>

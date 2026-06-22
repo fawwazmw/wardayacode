@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import { inkColors } from './theme.js';
 import { ToolCallView } from './ToolCallView.js';
+import { MarkdownView } from './components/MarkdownView.js';
 import { formatDuration } from '../utils/formatDuration.js';
 
 interface ToolCallMessage {
@@ -9,6 +10,10 @@ interface ToolCallMessage {
   toolName: string;
   args: Record<string, unknown>;
   result?: { success: boolean; content?: string; error?: string };
+  /** Wall-clock time the tool call started, in ms (Date.now()). */
+  startedAt?: number;
+  /** How long the tool took once finished, in ms. */
+  durationMs?: number;
 }
 
 interface TextMessage {
@@ -45,6 +50,8 @@ export function ChatView({
               toolName={msg.toolName}
               args={msg.args}
               result={msg.result}
+              startedAt={msg.startedAt}
+              durationMs={msg.durationMs}
               themeMode={themeMode}
             />
           );
@@ -97,9 +104,11 @@ export function ChatView({
             <Box>
               <Text color={answerDot}>● </Text>
               <Box flexDirection="column" flexGrow={1}>
-                <Text color={colors.assistant} wrap="wrap">
-                  {msg.content}
-                </Text>
+                <MarkdownView
+                  content={msg.content}
+                  color={colors.assistant}
+                  codeColor={colors.accent}
+                />
                 {msg.durationMs !== undefined && (
                   <Text color={colors.muted} dimColor>
                     {`Done in ${formatDuration(msg.durationMs)}`}
