@@ -23,6 +23,7 @@ import { Session } from './session/Session.js';
 import { SessionManager } from './session/SessionManager.js';
 import { Checkpoint } from './tools/Checkpoint.js';
 import { App } from './ui/App.js';
+import { enableKittyKeyboard, disableKittyKeyboard } from './ui/kittyKeyboard.js';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.js';
 import { getCurrentVersion } from './utils/version.js';
 import { checkForUpdates, fetchLatestVersion, isNewerVersion } from './utils/updateCheck.js';
@@ -292,6 +293,10 @@ function runTUI(
   version: string,
   initialPrompt?: string
 ): void {
+  // Opt into the kitty keyboard protocol (on supporting terminals) so
+  // Shift+Enter is distinguishable from Enter and can insert a newline.
+  enableKittyKeyboard();
+
   const { waitUntilExit } = render(
     React.createElement(
       ErrorBoundary,
@@ -312,6 +317,7 @@ function runTUI(
   );
 
   waitUntilExit().then(() => {
+    disableKittyKeyboard();
     process.exit(0);
   });
 }
