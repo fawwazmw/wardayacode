@@ -73,13 +73,20 @@ function MessageItem({
   }
 
   if (msg.role === 'user') {
-    // Blocked: inverse strip so the user's message reads as a distinct
-    // block, clearly separated from the assistant's answer below it.
+    // Blocked: inverse strip so the user's message reads as a distinct block,
+    // clearly separated from the assistant's answer below it. Multi-line input
+    // is rendered one padded row per line so the inverse forms a single solid
+    // rectangle — without padding, ragged line widths (and empty lines) make a
+    // multi-line message look like several disconnected inputs.
+    const lines = msg.content.split('\n');
+    const innerWidth = Math.max(...lines.map(line => line.length));
     return (
       <Box flexDirection="column" marginY={1}>
-        <Text color={colors.user} inverse>
-          {` ${msg.content} `}
-        </Text>
+        {lines.map((line, i) => (
+          <Text key={i} color={colors.user} inverse>
+            {` ${line.padEnd(innerWidth)} `}
+          </Text>
+        ))}
       </Box>
     );
   }
