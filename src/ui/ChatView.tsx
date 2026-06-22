@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box, Text } from 'ink';
+import React, { useRef } from 'react';
+import { Box, Static, Text } from 'ink';
 import { inkColors } from './theme.js';
 import { ToolCallView } from './ToolCallView.js';
 import { MarkdownView } from './components/MarkdownView.js';
@@ -24,12 +24,120 @@ interface TextMessage {
   durationMs?: number;
 }
 
-export type ChatMessage = TextMessage | ToolCallMessage;
+interface ToolOutputMessage {
+  type: 'tool_output';
+  toolName: string;
+  content: string;
+}
+
+export type ChatMessage = TextMessage | ToolCallMessage | ToolOutputMessage;
 
 interface ChatViewProps {
   messages: ChatMessage[];
   streamingText: string;
   themeMode: 'dark' | 'light';
+}
+
+/** True for a tool call that has not yet produced a result (still running). */
+function isInProgress(msg: ChatMessage): boolean {
+  return msg.type === 'tool_call' && !msg.result;
+}
+
+/** Renders a single settled message. Used both inside <Static> and the tail. */
+function MessageItem({
+  msg,
+  themeMode,
+}: {
+  msg: ChatMessage;
+  themeMode: 'dark' | 'light';
+}): React.ReactElement {
+  const colors = inkColors[themeMode];
+
+  if (msg.type === 'tool_call') {
+    return (
+      <ToolCallView
+        toolName={msg.toolName}
+        args={msg.args}
+        result={msg.result}
+        startedAt={msg.startedAt}
+        durationMs={msg.durationMs}
+        themeMode={themeMode}
+      />
+    );
+  }
+
+  if (msg.type === 'tool_output') {
+    // A full, verbatim reprint of a tool's output (triggered by ctrl+o). No
+    // markdown, no truncation — it flows into native scrollback like a log.
+    return (
+      <Box flexDirection="column" marginY={1} marginLeft={1}>
+        <Text color={colors.muted} dimColor>{`⤷ ${msg.toolName} (full output)`}</Text>
+        <Text color={colors.muted} wrap="wrap">{msg.content}</Text>
+      </Box>
+    );
+  }
+
+  if (msg.role === 'user') {
+    // Blocked: inverse strip so the user's message reads as a distinct
+    // block, clearly separated from the assistant's answer below it.
+    return (
+      <Box flexDirection="column" marginY={1}>
+        <Text color={colors.user} inverse>
+          {` ${msg.content} `}
+        </Text>
+      </Box>
+    );
+  }
+
+  // System/info notices (emitted via addSystemMessage with an "ℹ "
+  // prefix) are not answers — render them dim, without the answer dot.
+  if (msg.content.startsWith('ℹ ')) {
+    return (
+      <Box flexDirection="column" marginBottom={1}>
+        <Text color={colors.muted} dimColor wrap="wrap">
+          {msg.content}
+        </Text>
+      </Box>
+    );
+  }
+
+  // Errors are not answers either — mark them with a red dot.
+  if (msg.content.startsWith('Error: ')) {
+    return (
+      <Box flexDirection="column" marginBottom={1}>
+        <Box>
+          <Text color={colors.error}>● </Text>
+          <Box flexGrow={1}>
+            <Text color={colors.error} wrap="wrap">
+              {msg.content}
+            </Text>
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Assistant answer: a filled dot marks the answer (no "wardayacode"
+  // label), and the elapsed time is shown once the answer is complete.
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Box>
+        <Text color={colors.success}>● </Text>
+        <Box flexDirection="column" flexGrow={1}>
+          <MarkdownView
+            content={msg.content}
+            color={colors.assistant}
+            codeColor={colors.accent}
+          />
+          {msg.durationMs !== undefined && (
+            <Text color={colors.muted} dimColor>
+              {`Done in ${formatDuration(msg.durationMs)}`}
+            </Text>
+          )}
+        </Box>
+      </Box>
+    </Box>
+  );
 }
 
 export function ChatView({
@@ -38,87 +146,33 @@ export function ChatView({
   themeMode,
 }: ChatViewProps): React.ReactElement {
   const colors = inkColors[themeMode];
-  const answerDot = colors.success;
+
+  // Settled messages are committed to <Static>, which writes them once to the
+  // terminal and lets them flow into native scrollback. This is what makes a
+  // tall transcript (e.g. expanded tool output) scroll normally instead of
+  // fighting Ink's in-place frame eraser. In-progress tool calls stay in the
+  // dynamic tail below so their spinner/elapsed timer can keep updating.
+  const settled = messages.filter(msg => !isInProgress(msg));
+  const inProgress = messages.filter(isInProgress);
+
+  // <Static> tracks how many items it has already written. If the list shrinks
+  // (e.g. /clear resets messages to []), bump a key to remount it cleanly.
+  const epochRef = useRef(0);
+  const prevLenRef = useRef(0);
+  if (settled.length < prevLenRef.current) {
+    epochRef.current += 1;
+  }
+  prevLenRef.current = settled.length;
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      {messages.map((msg, idx) => {
-        if (msg.type === 'tool_call') {
-          return (
-            <ToolCallView
-              key={idx}
-              toolName={msg.toolName}
-              args={msg.args}
-              result={msg.result}
-              startedAt={msg.startedAt}
-              durationMs={msg.durationMs}
-              themeMode={themeMode}
-            />
-          );
-        }
+      <Static key={epochRef.current} items={settled}>
+        {(msg, idx) => <MessageItem key={idx} msg={msg} themeMode={themeMode} />}
+      </Static>
 
-        if (msg.role === 'user') {
-          // Blocked: inverse strip so the user's message reads as a distinct
-          // block, clearly separated from the assistant's answer below it.
-          return (
-            <Box key={idx} flexDirection="column" marginY={1}>
-              <Text color={colors.user} inverse>
-                {` ${msg.content} `}
-              </Text>
-            </Box>
-          );
-        }
-
-        // System/info notices (emitted via addSystemMessage with an "ℹ "
-        // prefix) are not answers — render them dim, without the answer dot.
-        if (msg.content.startsWith('ℹ ')) {
-          return (
-            <Box key={idx} flexDirection="column" marginBottom={1}>
-              <Text color={colors.muted} dimColor wrap="wrap">
-                {msg.content}
-              </Text>
-            </Box>
-          );
-        }
-
-        // Errors are not answers either — mark them with a red dot.
-        if (msg.content.startsWith('Error: ')) {
-          return (
-            <Box key={idx} flexDirection="column" marginBottom={1}>
-              <Box>
-                <Text color={colors.error}>● </Text>
-                <Box flexGrow={1}>
-                  <Text color={colors.error} wrap="wrap">
-                    {msg.content}
-                  </Text>
-                </Box>
-              </Box>
-            </Box>
-          );
-        }
-
-        // Assistant answer: a filled dot marks the answer (no "wardayacode"
-        // label), and the elapsed time is shown once the answer is complete.
-        return (
-          <Box key={idx} flexDirection="column" marginBottom={1}>
-            <Box>
-              <Text color={answerDot}>● </Text>
-              <Box flexDirection="column" flexGrow={1}>
-                <MarkdownView
-                  content={msg.content}
-                  color={colors.assistant}
-                  codeColor={colors.accent}
-                />
-                {msg.durationMs !== undefined && (
-                  <Text color={colors.muted} dimColor>
-                    {`Done in ${formatDuration(msg.durationMs)}`}
-                  </Text>
-                )}
-              </Box>
-            </Box>
-          </Box>
-        );
-      })}
+      {inProgress.map((msg, idx) => (
+        <MessageItem key={`progress-${idx}`} msg={msg} themeMode={themeMode} />
+      ))}
 
       {streamingText.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
