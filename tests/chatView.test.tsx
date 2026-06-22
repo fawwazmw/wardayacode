@@ -17,17 +17,27 @@ describe('ChatView', () => {
     expect(out).toContain('bash');
   });
 
-  it('renders a tool_output entry as verbatim full output', () => {
-    const messages: ChatMessage[] = [
-      { type: 'tool_output', toolName: 'bash', content: 'line A\nline B\nline C' },
-    ];
+  it('renders expandedOutput as verbatim full output in the live region', () => {
     const { lastFrame } = render(
-      <ChatView messages={messages} streamingText="" themeMode="dark" />,
+      <ChatView
+        messages={[]}
+        streamingText=""
+        themeMode="dark"
+        expandedOutput={{ toolName: 'bash', content: 'line A\nline B\nline C' }}
+      />,
     );
     const out = lastFrame() ?? '';
     expect(out).toContain('bash (full output)');
     expect(out).toContain('line A');
     expect(out).toContain('line C');
+  });
+
+  it('omits the full output when expandedOutput is null (collapsed)', () => {
+    const { lastFrame } = render(
+      <ChatView messages={[]} streamingText="" themeMode="dark" expandedOutput={null} />,
+    );
+    const out = lastFrame() ?? '';
+    expect(out).not.toContain('full output');
   });
 
   it('shows the streaming cursor while text is streaming', () => {
