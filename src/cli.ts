@@ -273,6 +273,9 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   const currentVersion = getCurrentVersion();
 
   if (options.tui !== false) {
+    // Ink owns the terminal — route logs to the file only so warn/error lines
+    // don't corrupt the frame or duplicate messages the UI already shows.
+    logger.setConsoleOutput(false);
     runTUI(agent, session, config, undoManager, checkpoint, permissions, currentVersion, initialPrompt);
   } else {
     await runPlainText(agent, session, permissions, currentVersion, initialPrompt);
