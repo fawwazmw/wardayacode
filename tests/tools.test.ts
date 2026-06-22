@@ -251,4 +251,16 @@ describe('BashTool', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('timed out');
   }, 5000);
+
+  it('runs commands with CI=true so watch-mode runners exit on their own', async () => {
+    const result = await tool.execute({ command: 'echo "CI=$CI"' });
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('CI=true');
+  });
+
+  it('forces a non-interactive pager', async () => {
+    const result = await tool.execute({ command: 'echo "PAGER=$PAGER"' });
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('PAGER=cat');
+  });
 });
