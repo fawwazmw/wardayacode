@@ -28,6 +28,22 @@ function isDestructive(command: string): string | null {
   return null;
 }
 
+/**
+ * Environment overrides that force spawned commands to be non-interactive and
+ * one-shot. Crucially, `CI=true` makes test runners (Vitest, Jest, etc.) run
+ * once and exit instead of dropping into a watch loop that never terminates and
+ * eventually trips the timeout. This is a process-level guarantee that holds no
+ * matter what command the model decides to run.
+ */
+export const NON_INTERACTIVE_ENV: Record<string, string> = {
+  CI: 'true',
+  // Common opt-outs that stop tools from waiting on a TTY / pager.
+  GIT_PAGER: 'cat',
+  PAGER: 'cat',
+  npm_config_yes: 'true',
+  DEBIAN_FRONTEND: 'noninteractive',
+};
+
 export class BashTool extends Tool {
   definition: ToolDefinition = {
     name: 'bash',
@@ -86,7 +102,9 @@ export class BashTool extends Tool {
 
       const proc = spawn('bash', ['-c', command], {
         cwd: workdir,
-        env: { ...process.env },
+        // Caller env first, then our non-interactive overrides win so watch/dev
+        // commands can't hang the agent regardless of which model ran them.
+        env: { ...process.env, ...NON_INTERACTIVE_ENV },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 

@@ -3,6 +3,8 @@ import { Box, Text, useInput, useApp } from 'ink';
 import { inkColors } from './theme.js';
 import { CommandPalette } from './CommandPalette.js';
 import { filterCommands } from './SlashCommands.js';
+import { Spinner } from './components/Spinner.js';
+import { normalizeKittyKeys } from './kittyKeyboard.js';
 import figures from 'figures';
 
 interface InputBarProps {
@@ -45,6 +47,13 @@ export function InputBar({
     setPaletteIndex(0);
   }, []);
 
+  const insertNewline = useCallback(() => {
+    const newVal = value.slice(0, cursorPos) + '\n' + value.slice(cursorPos);
+    setValue(newVal);
+    setCursorPos(cursorPos + 1);
+    setPaletteIndex(0);
+  }, [value, cursorPos]);
+
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim();
     if (trimmed.length === 0) return;
@@ -64,7 +73,12 @@ export function InputBar({
     setPaletteIndex(0);
   }, [value, onSubmit]);
 
-  useInput((input, key) => {
+  useInput((rawInput, rawKey) => {
+    // Under the kitty keyboard protocol, Shift+Enter and lone Esc arrive as
+    // CSI-u sequences Ink can't parse; map them back to Ink's Key shape so the
+    // branches below keep working unchanged.
+    const { input, key } = normalizeKittyKeys(rawInput, rawKey);
+
     if (key.ctrl && input === 'c') {
       if (isLoading && onInterrupt) {
         onInterrupt();
@@ -80,6 +94,13 @@ export function InputBar({
 
     if (key.ctrl && input === 'd') {
       exit();
+      return;
+    }
+
+    // Esc interrupts the running agent. Checked before the isLoading guard
+    // below, since that guard otherwise swallows all keys while loading.
+    if (key.escape && isLoading && onInterrupt) {
+      onInterrupt();
       return;
     }
 
@@ -99,6 +120,15 @@ export function InputBar({
       if (selected) {
         applyCompletion(selected.name);
       }
+      return;
+    }
+
+    // Newline (multi-line input) without submitting. Ctrl+J reliably arrives as
+    // input '\n' in every terminal; Shift+Enter only sends a distinct modifier
+    // on terminals that support it (many send a bare '\r', indistinguishable
+    // from Enter) — honor it when present.
+    if (input === '\n' || (key.return && key.shift)) {
+      insertNewline();
       return;
     }
 
@@ -228,17 +258,17 @@ export function InputBar({
         />
       )}
       <Box paddingX={1} gap={1}>
-        <Text color={colors.accent}>
-          {isLoading ? figures.ellipsis : figures.pointer}
-        </Text>
         {isLoading ? (
-          <Text color={colors.muted} dimColor>Thinking...</Text>
+          <Spinner label="Thinking..." color={colors.accent} />
         ) : (
-          <Text>
-            <Text color={colors.user}>{beforeCursor}</Text>
-            <Text color={colors.accent}>▌</Text>
-            <Text color={colors.user}>{afterCursor}</Text>
-          </Text>
+          <>
+            <Text color={colors.accent}>{figures.pointer}</Text>
+            <Text>
+              <Text color={colors.user}>{beforeCursor}</Text>
+              <Text color={colors.accent}>▌</Text>
+              <Text color={colors.user}>{afterCursor}</Text>
+            </Text>
+          </>
         )}
       </Box>
     </Box>

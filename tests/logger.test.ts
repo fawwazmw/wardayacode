@@ -19,6 +19,7 @@ describe('logger', () => {
     // Reset to warn (silent for most tests)
     logger.setLevel('warn');
     logger.setDebug(false);
+    logger.setConsoleOutput(true);
     logger.close();
   });
 
@@ -92,6 +93,26 @@ describe('logger', () => {
     expect((lines[1]!.meta as Record<string, unknown>).x).toBe(1);
 
     fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it('setConsoleOutput(false) suppresses stderr even at/above the active level', () => {
+    // This is what the TUI relies on: while Ink owns the terminal, warn/error
+    // must not leak to stderr (they would corrupt the frame and duplicate the
+    // messages the UI already renders).
+    logger.setLevel('warn');
+    logger.setConsoleOutput(false);
+    logger.warn('hidden from console', { k: 1 });
+    logger.error('also hidden', { k: 2 });
+    expect(stderrOutput).toHaveLength(0);
+  });
+
+  it('re-enabling console output restores stderr writes', () => {
+    logger.setConsoleOutput(false);
+    logger.warn('silent');
+    expect(stderrOutput).toHaveLength(0);
+    logger.setConsoleOutput(true);
+    logger.warn('loud');
+    expect(stderrOutput.some(l => l.includes('loud'))).toBe(true);
   });
 
   it('getLogDir returns path under home dir', () => {

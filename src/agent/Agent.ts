@@ -6,6 +6,7 @@ import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { ToolResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { isRetryableError, getRetryDelay, sleep } from '../utils/retry.js';
+import { injectCwdReminder } from './cwdReminder.js';
 
 export interface AgentConfig {
   model: LanguageModel;
@@ -16,6 +17,12 @@ export interface AgentConfig {
   temperature?: number;
   maxSteps?: number;
   maxRetries?: number;
+  /**
+   * Absolute working directory. When set, a recency reminder pinning this path
+   * is appended to the latest user turn — recency bias beats the system-prompt
+   * prior, which keeps models from inventing sandbox-style paths.
+   */
+  cwd?: string;
 }
 
 export interface AgentEvents {
@@ -37,6 +44,7 @@ export class Agent extends EventEmitter<AgentEvents> {
   private readonly temperature: number;
   private readonly maxSteps: number;
   private readonly maxRetries: number;
+  private readonly cwd: string | undefined;
 
   constructor(config: AgentConfig) {
     super();
@@ -48,6 +56,7 @@ export class Agent extends EventEmitter<AgentEvents> {
     this.temperature = config.temperature ?? 0;
     this.maxSteps = config.maxSteps ?? 25;
     this.maxRetries = config.maxRetries ?? 3;
+    this.cwd = config.cwd;
   }
 
   private buildTools(): Record<string, CoreTool> {
@@ -169,7 +178,8 @@ export class Agent extends EventEmitter<AgentEvents> {
       allMessages.push({ role: 'system', content: this.systemPrompt });
     }
 
-    allMessages.push(...messages);
+    const userMessages = this.cwd ? injectCwdReminder(messages, this.cwd) : messages;
+    allMessages.push(...userMessages);
 
     const tools = this.buildTools();
 

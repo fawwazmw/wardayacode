@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Box, useApp } from 'ink';
+import { Box, useApp, useInput } from 'ink';
 import type { Agent } from '../agent/index.js';
 import type { Session } from '../session/Session.js';
 import type { PermissionMode } from '../types.js';
@@ -7,7 +7,7 @@ import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { UndoManager } from '../tools/UndoManager.js';
 import type { Checkpoint } from '../tools/Checkpoint.js';
 import { ContextManager } from '../context/ContextManager.js';
-import { ChatView, type ChatMessage } from './ChatView.js';
+import { ChatView, type ChatMessage, type ExpandedOutput } from './ChatView.js';
 import { InputBar } from './InputBar.js';
 import { StatusBar } from './StatusBar.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
@@ -63,6 +63,43 @@ export function App({
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Full output of the most-recent tool call, toggled by ctrl+o. It renders in
+  // the live region (ChatView's dynamic tail), not <Static>, so it can be
+  // collapsed back to the "+N lines" preview — committed scrollback can't.
+  const [expandedOutput, setExpandedOutput] = useState<ExpandedOutput | null>(null);
+  // Ink's useInput keeps the handler closure from the first render, so reads
+  // inside it must go through refs to see the latest values.
+  const expandedOutputRef = useRef<ExpandedOutput | null>(null);
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  messagesRef.current = messages;
+
+  const setExpanded = useCallback((value: ExpandedOutput | null) => {
+    expandedOutputRef.current = value;
+    setExpandedOutput(value);
+  }, []);
+
+  // Ctrl+O toggles the latest tool call's full output on/off.
+  useInput((input, key) => {
+    if (key.ctrl && input === 'o') {
+      if (expandedOutputRef.current) {
+        setExpanded(null);
+        return;
+      }
+      const msgs = messagesRef.current;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const msg = msgs[i]!;
+        if (msg.type === 'tool_call' && msg.result) {
+          const content = msg.result.success
+            ? msg.result.content ?? ''
+            : msg.result.error ?? msg.result.content ?? '';
+          if (content.trim() === '') return;
+          setExpanded({ toolName: msg.toolName, content });
+          return;
+        }
+      }
+    }
+  });
 
   const addSystemMessage = useCallback((content: string) => {
     setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: `ℹ ${content}` }]);
@@ -169,7 +206,10 @@ export function App({
     }
 
     const cmdResult = await handleSlashCommand(text, {
-      clearMessages: () => setMessages([]),
+      clearMessages: () => {
+        setMessages([]);
+        setExpanded(null);
+      },
       setPermissionMode: (mode) => {
         setCurrentPermissionMode(mode);
         permissions.setMode(mode);
@@ -213,6 +253,9 @@ export function App({
     }
 
     setMessages(prev => [...prev, { type: 'text', role: 'user', content: text }]);
+    // A stale expansion from the previous turn would otherwise dangle at the
+    // bottom of the live region; drop it when a new turn begins.
+    setExpanded(null);
     setIsLoading(true);
     setStreamingText('');
 
@@ -247,6 +290,7 @@ export function App({
         type: 'tool_call',
         toolName,
         args,
+        startedAt: Date.now(),
       }]);
     };
 
@@ -256,7 +300,14 @@ export function App({
         for (let i = updated.length - 1; i >= 0; i--) {
           const msg = updated[i]!;
           if (msg.type === 'tool_call' && msg.toolName === toolName && !msg.result) {
-            updated[i] = { type: 'tool_call', toolName: msg.toolName, args: msg.args, result };
+            updated[i] = {
+              type: 'tool_call',
+              toolName: msg.toolName,
+              args: msg.args,
+              result,
+              startedAt: msg.startedAt,
+              durationMs: msg.startedAt !== undefined ? Date.now() - msg.startedAt : undefined,
+            };
             break;
           }
         }
@@ -282,11 +333,13 @@ export function App({
     agent.on('retry', retryHandler);
     agent.on('usage', usageHandler);
 
+    const startedAt = Date.now();
     try {
       const response = await agent.run(newHistory);
+      const durationMs = Date.now() - startedAt;
 
       setStreamingText('');
-      setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response }]);
+      setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response, durationMs }]);
       ctx.addCoreMessage('assistant', response);
 
       await session.append({
@@ -311,7 +364,7 @@ export function App({
       abortRef.current = null;
       setIsLoading(false);
     }
-  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions]);
+  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions, setExpanded]);
 
   React.useEffect(() => {
     if (initialPrompt) {
@@ -339,6 +392,7 @@ export function App({
           messages={messages}
           streamingText={streamingText}
           themeMode={themeMode}
+          expandedOutput={expandedOutput}
         />
       )}
 

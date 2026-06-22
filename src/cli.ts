@@ -23,6 +23,7 @@ import { Session } from './session/Session.js';
 import { SessionManager } from './session/SessionManager.js';
 import { Checkpoint } from './tools/Checkpoint.js';
 import { App } from './ui/App.js';
+import { enableKittyKeyboard, disableKittyKeyboard } from './ui/kittyKeyboard.js';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.js';
 import { getCurrentVersion } from './utils/version.js';
 import { checkForUpdates, fetchLatestVersion, isNewerVersion } from './utils/updateCheck.js';
@@ -258,6 +259,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     maxTokens: config.maxTokens,
     temperature: config.temperature,
     maxRetries: config.maxRetries,
+    cwd: projectRoot,
   });
 
   const checkpoint = new Checkpoint(projectRoot);
@@ -272,6 +274,9 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   const currentVersion = getCurrentVersion();
 
   if (options.tui !== false) {
+    // Ink owns the terminal — route logs to the file only so warn/error lines
+    // don't corrupt the frame or duplicate messages the UI already shows.
+    logger.setConsoleOutput(false);
     runTUI(agent, session, config, undoManager, checkpoint, permissions, currentVersion, initialPrompt);
   } else {
     await runPlainText(agent, session, permissions, currentVersion, initialPrompt);
@@ -288,6 +293,10 @@ function runTUI(
   version: string,
   initialPrompt?: string
 ): void {
+  // Opt into the kitty keyboard protocol (on supporting terminals) so
+  // Shift+Enter is distinguishable from Enter and can insert a newline.
+  enableKittyKeyboard();
+
   const { waitUntilExit } = render(
     React.createElement(
       ErrorBoundary,
@@ -308,6 +317,7 @@ function runTUI(
   );
 
   waitUntilExit().then(() => {
+    disableKittyKeyboard();
     process.exit(0);
   });
 }

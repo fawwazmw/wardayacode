@@ -49,7 +49,7 @@ export function getTheme(mode: 'dark' | 'light'): Theme {
 export const inkColors = {
   dark: {
     user: '#E0E0E0',
-    assistant: '#A78BFA',
+    assistant: '#E0E0E0',
     toolCall: '#818CF8',
     toolResult: '#6366F1',
     error: '#F87171',
@@ -61,7 +61,7 @@ export const inkColors = {
   },
   light: {
     user: '#1E1B4B',
-    assistant: '#6D28D9',
+    assistant: '#1F2937',
     toolCall: '#4F46E5',
     toolResult: '#4338CA',
     error: '#DC2626',

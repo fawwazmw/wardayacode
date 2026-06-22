@@ -22,6 +22,10 @@ const LEVEL_COLOR: Record<LogLevel, (s: string) => string> = {
 let currentLevel: LogLevel = (process.env['LOG_LEVEL'] as LogLevel) ?? 'warn';
 let logFileStream: fs.WriteStream | null = null;
 let debugMode = false;
+// While the Ink TUI owns the terminal, raw stderr writes corrupt the frame and
+// duplicate messages the UI already surfaces. The TUI flips this off so logs go
+// to the file only; plain-text/CLI mode leaves it on.
+let consoleOutput = true;
 
 function getLogDir(): string {
   return path.join(os.homedir(), '.wardayacode', 'logs');
@@ -56,7 +60,7 @@ function shouldLog(level: LogLevel): boolean {
 function log(level: LogLevel, msg: string, meta?: unknown): void {
   writeToFile(level, msg, meta);
 
-  if (!shouldLog(level)) return;
+  if (!consoleOutput || !shouldLog(level)) return;
 
   const color = LEVEL_COLOR[level];
   const prefix = color(`[${level}]`);
@@ -88,6 +92,11 @@ export const logger = {
   setDebug(enabled: boolean): void {
     debugMode = enabled;
     if (enabled) currentLevel = 'debug';
+  },
+
+  /** Toggle stderr console output. File logging is unaffected. */
+  setConsoleOutput(enabled: boolean): void {
+    consoleOutput = enabled;
   },
 
   isDebug(): boolean {
