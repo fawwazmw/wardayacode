@@ -12,6 +12,7 @@ import { InputBar } from './InputBar.js';
 import { StatusBar } from './StatusBar.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
 import { handleSlashCommand } from './SlashCommands.js';
+import { HelpDialog } from './HelpDialog.js';
 import { WelcomeScreen } from './components/WelcomeScreen.js';
 import { checkForUpdates, type UpdateInfo } from '../utils/updateCheck.js';
 import {
@@ -59,6 +60,7 @@ export function App({
   const [isLoading, setIsLoading] = useState(false);
   const [tokenUsage, setTokenUsage] = useState({ input: 0, output: 0 });
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const contextManagerRef = useRef<ContextManager>(new ContextManager(process.cwd()));
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
@@ -81,6 +83,7 @@ export function App({
 
   // Ctrl+O toggles the latest tool call's full output on/off.
   useInput((input, key) => {
+    if (showHelp) return;
     if (key.ctrl && input === 'o') {
       if (expandedOutputRef.current) {
         setExpanded(null);
@@ -153,6 +156,11 @@ export function App({
     const trimmed = text.trim();
     const parts = trimmed.split(/\s+/);
     const command = parts[0]?.toLowerCase();
+
+    if (command === '/help' || command === '/h') {
+      setShowHelp(true);
+      return;
+    }
 
     if (command === '/login') {
       const provider = parts[1];
@@ -406,9 +414,14 @@ export function App({
         />
       )}
 
+      {showHelp && (
+        <HelpDialog themeMode={themeMode} onClose={() => setShowHelp(false)} />
+      )}
+
       <InputBar
         onSubmit={handleSubmit}
         isLoading={isLoading || !!pendingPermission}
+        inputDisabled={showHelp}
         themeMode={themeMode}
         onInterrupt={handleInterrupt}
       />
