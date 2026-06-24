@@ -22,6 +22,10 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     ]),
     resumeSession: vi.fn().mockResolvedValue('Resumed session abc123 (42 messages)'),
     initWardayaDoc: vi.fn().mockResolvedValue('WARDAYA.md created in /test'),
+    getFastMode: () => false,
+    setFastMode: vi.fn(),
+    getConfigSummary: () => 'Model: claude-sonnet-4\nVersion: 0.5.0\nTheme: dark\nMode: default',
+    openKeybindings: vi.fn().mockResolvedValue('Keybindings file: /test/.wardayacode/keybindings.json'),
     exit: vi.fn(),
     undo: vi.fn().mockResolvedValue('Undid edit_file on src/foo.ts'),
     checkpoint: vi.fn().mockResolvedValue('Checkpoint created (git stash).'),
@@ -144,6 +148,46 @@ describe('handleSlashCommand', () => {
     expect(result.handled).toBe(true);
     expect(ctx.initWardayaDoc).toHaveBeenCalled();
     expect(result.output).toContain('WARDAYA.md');
+  });
+
+  it('handles /plan', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/plan', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.setPermissionMode).toHaveBeenCalledWith('plan');
+    expect(result.output).toContain('plan');
+  });
+
+  it('handles /stats', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/stats', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Fast:');
+    expect(result.output).toContain('5');
+  });
+
+  it('handles /fast toggle', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/fast', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.setFastMode).toHaveBeenCalledWith(true);
+    expect(result.output).toContain('enabled');
+  });
+
+  it('handles /config', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/config', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Model:');
+    expect(result.output).toContain('Theme:');
+  });
+
+  it('handles /keybindings', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/keybindings', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.openKeybindings).toHaveBeenCalled();
+    expect(result.output).toContain('keybindings.json');
   });
 
   it('handles /clear', async () => {
@@ -295,6 +339,11 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/context');
     expect(names).toContain('/resume');
     expect(names).toContain('/init');
+    expect(names).toContain('/plan');
+    expect(names).toContain('/stats');
+    expect(names).toContain('/fast');
+    expect(names).toContain('/config');
+    expect(names).toContain('/keybindings');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

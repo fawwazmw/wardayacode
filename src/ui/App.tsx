@@ -69,6 +69,7 @@ export function App({
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [themeMode, setThemeMode] = useState(initialThemeMode);
   const [sessionName, setSessionName] = useState('');
+  const [fastMode, setFastMode] = useState(false);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -305,6 +306,29 @@ export function App({
         ].join('\n');
         await fs.writeFile(filepath, content, 'utf-8');
         return `WARDAYA.md created in ${cwd}`;
+      },
+      getFastMode: () => fastMode,
+      setFastMode: (fast) => setFastMode(fast),
+      getConfigSummary: () => {
+        return [
+          `Model:     ${model}`,
+          `Version:   ${version}`,
+          `Theme:     ${themeMode}`,
+          `Mode:      ${currentPermissionMode}`,
+          `Session:   ${session.getId().slice(0, 8)}`,
+        ].join('\n');
+      },
+      openKeybindings: async () => {
+        const dir = path.join(process.cwd(), '.wardayacode');
+        const filepath = path.join(dir, 'keybindings.json');
+        await fs.mkdir(dir, { recursive: true });
+        try {
+          await fs.access(filepath);
+        } catch {
+          // Create default keybindings file
+          await fs.writeFile(filepath, JSON.stringify({}, null, 2), 'utf-8');
+        }
+        return `Keybindings file: ${filepath}`;
       },
       exit,
       undo: async () => {

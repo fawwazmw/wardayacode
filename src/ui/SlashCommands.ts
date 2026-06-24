@@ -16,6 +16,11 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/context', description: 'Visualize current context usage stats' },
   { name: '/resume', description: 'Resume a previous conversation', args: '<session-id>' },
   { name: '/init', description: 'Initialize a new WARDAYA.md file with codebase documentation' },
+  { name: '/plan', description: 'Switch to plan mode (read-only, no destructive actions)' },
+  { name: '/stats', description: 'Show usage statistics and activity for this session' },
+  { name: '/fast', description: 'Toggle fast mode for faster model responses' },
+  { name: '/config', description: 'Show current configuration summary' },
+  { name: '/keybindings', description: 'Open or create your keybindings configuration file' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -60,6 +65,10 @@ export interface SlashCommandContext {
   getSessionDuration: () => number;
   getMessageCount: () => number;
   getContextStats: () => { messageCount: number; estimatedTokens: number; shouldCompact: boolean };
+  getFastMode: () => boolean;
+  setFastMode: (fast: boolean) => void;
+  getConfigSummary: () => string;
+  openKeybindings: () => Promise<string>;
   exportSession: () => Promise<string>;
   listSessions: () => Promise<SessionListInfo[]>;
   resumeSession: (sessionId: string) => Promise<string>;
@@ -218,6 +227,40 @@ export async function handleSlashCommand(
 
     case '/init':
       return { handled: true, output: await ctx.initWardayaDoc() };
+
+    case '/plan':
+      ctx.setPermissionMode('plan');
+      return { handled: true, output: 'Switched to plan mode (read-only). Use /mode to change.' };
+
+    case '/stats': {
+      const stUsage = ctx.getTokenUsage();
+      const stDur = formatDuration(ctx.getSessionDuration());
+      const modelShort = ctx.getModel().split('/').pop() ?? ctx.getModel();
+      return {
+        handled: true,
+        output: [
+          `Model:     ${modelShort}`,
+          `Mode:      ${ctx.getPermissionMode()}`,
+          `Fast:      ${ctx.getFastMode() ? 'on' : 'off'}`,
+          `Messages:  ${ctx.getMessageCount()}`,
+          `Tokens in: ~${stUsage.input.toLocaleString()}`,
+          `Tokens out:~${stUsage.output.toLocaleString()}`,
+          `Duration:  ${stDur}`,
+        ].join('\n'),
+      };
+    }
+
+    case '/fast': {
+      const newFast = !ctx.getFastMode();
+      ctx.setFastMode(newFast);
+      return { handled: true, output: `Fast mode ${newFast ? 'enabled' : 'disabled'}.` };
+    }
+
+    case '/config':
+      return { handled: true, output: ctx.getConfigSummary() };
+
+    case '/keybindings':
+      return { handled: true, output: await ctx.openKeybindings() };
 
     case '/clear':
       ctx.clearMessages();
