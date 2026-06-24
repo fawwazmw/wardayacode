@@ -7,6 +7,7 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     setPermissionMode: vi.fn(),
     getSessionId: () => 'test-session-id-1234',
     getModel: () => 'claude-sonnet-4-20250514',
+    getVersion: () => '0.5.0',
     getPermissionMode: () => 'default',
     getTokenUsage: () => ({ input: 100, output: 200 }),
     getMessageCount: () => 5,
@@ -33,6 +34,17 @@ describe('handleSlashCommand', () => {
     expect(result.handled).toBe(true);
     expect(result.output).toContain('/help');
     expect(result.output).toContain('/clear');
+  });
+
+  it('handles /status', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/status', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('0.5.0');
+    expect(result.output).toContain('claude-sonnet-4-20250514');
+    expect(result.output).toContain('default');
+    expect(result.output).toContain('test-session-id-1234');
+    expect(result.output).toContain('Messages: 5');
   });
 
   it('handles /clear', async () => {
@@ -176,6 +188,7 @@ describe('SLASH_COMMANDS registry', () => {
   it('has all expected commands', () => {
     const names = SLASH_COMMANDS.map(c => c.name);
     expect(names).toContain('/help');
+    expect(names).toContain('/status');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

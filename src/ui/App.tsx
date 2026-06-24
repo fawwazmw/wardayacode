@@ -224,6 +224,7 @@ export function App({
       },
       getSessionId: () => session.getId(),
       getModel: () => model,
+      getVersion: () => version,
       getPermissionMode: () => currentPermissionMode,
       getTokenUsage: () => tokenUsage,
       getMessageCount: () => messages.length,

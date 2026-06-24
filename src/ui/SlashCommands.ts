@@ -8,6 +8,7 @@ export interface SlashCommandEntry {
 
 export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/help', description: 'Show available commands' },
+  { name: '/status', description: 'Show WardayaCode status including version, model, account, API connectivity, and tool statuses' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -36,6 +37,7 @@ export interface SlashCommandContext {
   setPermissionMode: (mode: PermissionMode) => void;
   getSessionId: () => string;
   getModel: () => string;
+  getVersion: () => string;
   getPermissionMode: () => PermissionMode;
   getTokenUsage: () => { input: number; output: number };
   getMessageCount: () => number;
@@ -78,6 +80,19 @@ export async function handleSlashCommand(
       lines.push('');
       lines.push('  Ctrl+C               Cancel / Clear / Exit');
       lines.push('  Ctrl+D               Exit wardayacode');
+      return { handled: true, output: lines.join('\n') };
+    }
+
+    case '/status': {
+      const sUsage = ctx.getTokenUsage();
+      const lines = [
+        `Version:  ${ctx.getVersion()}`,
+        `Model:    ${ctx.getModel()}`,
+        `Mode:     ${ctx.getPermissionMode()}`,
+        `Session:  ${ctx.getSessionId()}`,
+        `Messages: ${ctx.getMessageCount()}`,
+        `Tokens:   ~${sUsage.input} in / ~${sUsage.output} out`,
+      ];
       return { handled: true, output: lines.join('\n') };
     }
 
