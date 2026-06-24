@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { inkColors } from './theme.js';
 import { normalizeKittyKeys } from './kittyKeyboard.js';
+import { SLASH_COMMANDS } from './SlashCommands.js';
 
 interface HelpDialogProps {
   themeMode: 'dark' | 'light';
@@ -113,6 +114,11 @@ const SHORTCUT_GROUPS: Shortcut[][] = [
     { key: '/keybindings', desc: 'to customize' },
   ],
 ];
+
+// Names of commands that are actually wired up and runnable today. Derived from
+// the live registry so the help dialog's "available" flag stays in sync as new
+// commands graduate from the catalog to real implementations.
+const AVAILABLE_COMMANDS = new Set(SLASH_COMMANDS.map(c => c.name));
 
 export function HelpDialog({ themeMode, onClose }: HelpDialogProps): React.ReactElement {
   const colors = inkColors[themeMode];
@@ -246,18 +252,28 @@ function CommandsSection({
 
   return (
     <Box flexDirection="column">
-      {visible.map(cmd => (
-        <Text key={cmd.name} wrap="truncate-end">
-          <Text color={colors.toolCall}>{cmd.name.padEnd(nameWidth)}</Text>
-          <Text color={colors.muted}>{'  '}</Text>
-          <Text color={colors.user}>{cmd.desc}</Text>
-        </Text>
-      ))}
+      {visible.map(cmd => {
+        const available = AVAILABLE_COMMANDS.has(cmd.name);
+        return (
+          <Text key={cmd.name} wrap="truncate-end">
+            <Text color={available ? colors.toolCall : colors.muted} dimColor={!available}>
+              {cmd.name.padEnd(nameWidth)}
+            </Text>
+            <Text color={colors.muted}>{'  '}</Text>
+            <Text color={available ? colors.user : colors.muted} dimColor={!available}>
+              {cmd.desc}
+            </Text>
+            {!available && <Text color={colors.warning} dimColor>{'  (soon)'}</Text>}
+          </Text>
+        );
+      })}
       <Box marginTop={1}>
         <Text color={colors.muted} dimColor>
           {firstShown}–{lastShown} of {HELP_COMMANDS.length}
           {scrollOffset > 0 ? '  ↑ more' : ''}
           {lastShown < HELP_COMMANDS.length ? '  ↓ more' : ''}
+          {'   '}
+          <Text color={colors.warning}>(soon)</Text> = not yet available
         </Text>
       </Box>
     </Box>
