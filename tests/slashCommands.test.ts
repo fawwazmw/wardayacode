@@ -7,6 +7,8 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     setPermissionMode: vi.fn(),
     setThemeMode: vi.fn(),
     getSessionId: () => 'test-session-id-1234',
+    getSessionName: () => '',
+    setSessionName: vi.fn(),
     getModel: () => 'claude-sonnet-4-20250514',
     getVersion: () => '0.5.0',
     getPermissionMode: () => 'default',
@@ -89,6 +91,21 @@ describe('handleSlashCommand', () => {
     expect(result.handled).toBe(true);
     expect(ctx.exportSession).toHaveBeenCalled();
     expect(result.output).toContain('wardayacode-export');
+  });
+
+  it('handles /rename setting a name', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/rename my session', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.setSessionName).toHaveBeenCalledWith('my session');
+    expect(result.output).toContain('my session');
+  });
+
+  it('handles /rename without arg showing current name', async () => {
+    const ctx = createMockContext({ getSessionName: () => 'my-test' });
+    const result = await handleSlashCommand('/rename', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('my-test');
   });
 
   it('handles /clear', async () => {
@@ -236,6 +253,7 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/cost');
     expect(names).toContain('/theme');
     expect(names).toContain('/export');
+    expect(names).toContain('/rename');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

@@ -12,6 +12,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/cost', description: 'Show total cost and duration of the current session' },
   { name: '/theme', description: 'Change the theme', args: '<dark|light>' },
   { name: '/export', description: 'Export the current conversation to a file' },
+  { name: '/rename', description: 'Rename the current conversation', args: '<name>' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -40,6 +41,8 @@ export interface SlashCommandContext {
   setPermissionMode: (mode: PermissionMode) => void;
   setThemeMode: (mode: 'dark' | 'light') => void;
   getSessionId: () => string;
+  getSessionName: () => string;
+  setSessionName: (name: string) => void;
   getModel: () => string;
   getVersion: () => string;
   getPermissionMode: () => PermissionMode;
@@ -158,6 +161,16 @@ export async function handleSlashCommand(
 
     case '/export':
       return { handled: true, output: await ctx.exportSession() };
+
+    case '/rename': {
+      if (!arg) {
+        const curName = ctx.getSessionName();
+        return { handled: true, output: curName ? `Session name: ${curName}` : 'No session name set. Usage: /rename <name>' };
+      }
+      const newName = parts.slice(1).join(' ').trim();
+      ctx.setSessionName(newName);
+      return { handled: true, output: `Session renamed to: ${newName}` };
+    }
 
     case '/clear':
       ctx.clearMessages();

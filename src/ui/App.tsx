@@ -67,6 +67,7 @@ export function App({
   const sessionStartRef = useRef(Date.now());
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [themeMode, setThemeMode] = useState(initialThemeMode);
+  const [sessionName, setSessionName] = useState('');
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -228,6 +229,8 @@ export function App({
       },
       setThemeMode: (mode) => setThemeMode(mode),
       getSessionId: () => session.getId(),
+      getSessionName: () => sessionName,
+      setSessionName: (name) => setSessionName(name),
       getModel: () => model,
       getVersion: () => version,
       getPermissionMode: () => currentPermissionMode,
