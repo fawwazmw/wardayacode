@@ -10,6 +10,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/help', description: 'Show available commands' },
   { name: '/status', description: 'Show WardayaCode status including version, model, account, API connectivity, and tool statuses' },
   { name: '/cost', description: 'Show total cost and duration of the current session' },
+  { name: '/theme', description: 'Change the theme', args: '<dark|light>' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -36,6 +37,7 @@ export function filterCommands(input: string): SlashCommandEntry[] {
 export interface SlashCommandContext {
   clearMessages: () => void;
   setPermissionMode: (mode: PermissionMode) => void;
+  setThemeMode: (mode: 'dark' | 'light') => void;
   getSessionId: () => string;
   getModel: () => string;
   getVersion: () => string;
@@ -142,6 +144,14 @@ export async function handleSlashCommand(
         `  Duration: ${dur}`,
       ];
       return { handled: true, output: lines.join('\n') };
+    }
+
+    case '/theme': {
+      if (arg === 'dark' || arg === 'light') {
+        ctx.setThemeMode(arg);
+        return { handled: true, output: `Theme changed to ${arg}.` };
+      }
+      return { handled: true, output: 'Usage: /theme <dark|light>' };
     }
 
     case '/clear':

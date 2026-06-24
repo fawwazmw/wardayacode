@@ -47,7 +47,7 @@ export function App({
   session,
   model,
   permissionMode: initialPermissionMode,
-  themeMode,
+  themeMode: initialThemeMode,
   undoManager,
   checkpoint,
   permissions,
@@ -64,6 +64,7 @@ export function App({
   const contextManagerRef = useRef<ContextManager>(new ContextManager(process.cwd()));
   const sessionStartRef = useRef(Date.now());
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
+  const [themeMode, setThemeMode] = useState(initialThemeMode);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -223,6 +224,7 @@ export function App({
         setCurrentPermissionMode(mode);
         permissions.setMode(mode);
       },
+      setThemeMode: (mode) => setThemeMode(mode),
       getSessionId: () => session.getId(),
       getModel: () => model,
       getVersion: () => version,

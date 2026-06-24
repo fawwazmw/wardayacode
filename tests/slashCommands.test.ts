@@ -5,6 +5,7 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
   return {
     clearMessages: vi.fn(),
     setPermissionMode: vi.fn(),
+    setThemeMode: vi.fn(),
     getSessionId: () => 'test-session-id-1234',
     getModel: () => 'claude-sonnet-4-20250514',
     getVersion: () => '0.5.0',
@@ -57,6 +58,28 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('$0.0030');
     expect(result.output).toContain('$0.0033');
     expect(result.output).toContain('Duration: 1m');
+  });
+
+  it('handles /theme dark', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/theme dark', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.setThemeMode).toHaveBeenCalledWith('dark');
+    expect(result.output).toContain('dark');
+  });
+
+  it('handles /theme light', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/theme light', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.setThemeMode).toHaveBeenCalledWith('light');
+  });
+
+  it('handles /theme with no arg or invalid arg', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/theme', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Usage');
   });
 
   it('handles /clear', async () => {
@@ -202,6 +225,7 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/help');
     expect(names).toContain('/status');
     expect(names).toContain('/cost');
+    expect(names).toContain('/theme');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');
