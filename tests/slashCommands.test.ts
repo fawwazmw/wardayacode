@@ -27,6 +27,9 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     getColor: () => 'accent',
     setColor: vi.fn(),
     copyLastResponse: vi.fn().mockResolvedValue('Last response: Hello!'),
+    getEffort: () => 'medium',
+    setEffort: vi.fn(),
+    setTuiRenderer: (r: string) => `TUI renderer set to: ${r}`,
     getConfigSummary: () => 'Model: claude-sonnet-4\nVersion: 0.5.0\nTheme: dark\nMode: default',
     openKeybindings: vi.fn().mockResolvedValue('Keybindings file: /test/.wardayacode/keybindings.json'),
     exit: vi.fn(),
@@ -271,6 +274,48 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('~/.claude/memory');
   });
 
+  it('handles /anw', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/anw', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('question');
+  });
+
+  it('handles /effort without arg', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/effort', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('medium');
+  });
+
+  it('handles /effort with arg', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/effort high', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.setEffort).toHaveBeenCalledWith('high');
+  });
+
+  it('handles /tui', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/tui fullscreen', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('fullscreen');
+  });
+
+  it('handles /ide', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/ide', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('IDE');
+  });
+
+  it('handles /stickers', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/stickers', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('stickers');
+  });
+
   it('handles /clear', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/clear', ctx);
@@ -435,6 +480,11 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/statusline');
     expect(names).toContain('/hooks');
     expect(names).toContain('/memory');
+    expect(names).toContain('/anw');
+    expect(names).toContain('/effort');
+    expect(names).toContain('/tui');
+    expect(names).toContain('/ide');
+    expect(names).toContain('/stickers');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

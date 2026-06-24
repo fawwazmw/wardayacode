@@ -71,6 +71,8 @@ export function App({
   const [sessionName, setSessionName] = useState('');
   const [fastMode, setFastMode] = useState(false);
   const [colorValue, setColorValue] = useState('accent');
+  const [effortLevel, setEffortLevel] = useState('medium');
+  const [tuiRenderer, setTuiRenderer] = useState('default');
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -312,6 +314,12 @@ export function App({
       setFastMode: (fast) => setFastMode(fast),
       getColor: () => colorValue,
       setColor: (color) => setColorValue(color),
+      getEffort: () => effortLevel,
+      setEffort: (level) => setEffortLevel(level),
+      setTuiRenderer: (renderer: string) => {
+        setTuiRenderer(renderer);
+        return `TUI renderer set to: ${renderer}`;
+      },
       copyLastResponse: async () => {
         const msgs = messagesRef.current;
         for (let i = msgs.length - 1; i >= 0; i--) {

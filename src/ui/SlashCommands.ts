@@ -31,6 +31,11 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/statusline', description: "Set up WardayaCode's status line UI" },
   { name: '/hooks', description: 'View hook configurations for tool events' },
   { name: '/memory', description: 'Edit Wardaya memory files' },
+  { name: '/anw', description: 'Ask a quick side question without interrupting the main conversation' },
+  { name: '/effort', description: 'Set effort level for model usage', args: '<level>' },
+  { name: '/tui', description: 'Set the terminal UI renderer (default | fullscreen)', args: '<mode>' },
+  { name: '/ide', description: 'Manage IDE integrations and show status' },
+  { name: '/stickers', description: 'Get link to order WardayaCode stickers' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -68,6 +73,9 @@ export interface SlashCommandContext {
   setColor: (color: string) => void;
   getColor: () => string;
   copyLastResponse: () => Promise<string>;
+  setEffort: (level: string) => void;
+  getEffort: () => string;
+  setTuiRenderer: (renderer: string) => string;
   getSessionId: () => string;
   getSessionName: () => string;
   setSessionName: (name: string) => void;
@@ -314,6 +322,30 @@ export async function handleSlashCommand(
 
     case '/memory':
       return { handled: true, output: 'Wardaya memory files are stored in ~/.claude/memory/\nUse /memory <topic> to edit or view memory entries.' };
+
+    case '/anw':
+      return { handled: true, output: 'Side question mode:\nType your question after /anw and the response won\'t affect the conversation history.' };
+
+    case '/effort': {
+      if (!arg) {
+        return { handled: true, output: `Current effort level: ${ctx.getEffort()}\nUsage: /effort <low|medium|high>` };
+      }
+      ctx.setEffort(arg);
+      return { handled: true, output: `Effort level set to: ${arg}` };
+    }
+
+    case '/tui': {
+      if (!arg) {
+        return { handled: true, output: 'Usage: /tui <default|fullscreen>' };
+      }
+      return { handled: true, output: ctx.setTuiRenderer(arg) };
+    }
+
+    case '/ide':
+      return { handled: true, output: 'IDE integrations:\n  WardayaCode supports VS Code and JetBrains IDEs.\n  Use /ide <vscode|jetbrains> to set up.' };
+
+    case '/stickers':
+      return { handled: true, output: 'Get WardayaCode stickers: https://github.com/fawwazmw/wardayacode' };
 
     case '/clear':
       ctx.clearMessages();
