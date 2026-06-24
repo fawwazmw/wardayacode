@@ -237,6 +237,17 @@ export function App({
       getTokenUsage: () => tokenUsage,
       getSessionDuration: () => Date.now() - sessionStartRef.current,
       getMessageCount: () => messages.length,
+      getContextStats: () => {
+        const ctx = contextManagerRef.current;
+        const msgs = ctx.getMessages();
+        // Rough token estimate matching ContextManager.estimateTokens
+        const estimatedTokens = msgs.reduce((sum, m) => sum + Math.ceil(m.content.length * 0.4) + 4, 0);
+        return {
+          messageCount: msgs.length,
+          estimatedTokens,
+          shouldCompact: ctx.shouldCompact(),
+        };
+      },
       exportSession: async () => {
         const content = await session.export();
         const cwd = process.cwd();

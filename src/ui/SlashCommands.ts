@@ -13,6 +13,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/theme', description: 'Change the theme', args: '<dark|light>' },
   { name: '/export', description: 'Export the current conversation to a file' },
   { name: '/rename', description: 'Rename the current conversation', args: '<name>' },
+  { name: '/context', description: 'Visualize current context usage stats' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -49,6 +50,7 @@ export interface SlashCommandContext {
   getTokenUsage: () => { input: number; output: number };
   getSessionDuration: () => number;
   getMessageCount: () => number;
+  getContextStats: () => { messageCount: number; estimatedTokens: number; shouldCompact: boolean };
   exportSession: () => Promise<string>;
   exit: () => void;
   undo: () => Promise<string>;
@@ -170,6 +172,19 @@ export async function handleSlashCommand(
       const newName = parts.slice(1).join(' ').trim();
       ctx.setSessionName(newName);
       return { handled: true, output: `Session renamed to: ${newName}` };
+    }
+
+    case '/context': {
+      const cs = ctx.getContextStats();
+      return {
+        handled: true,
+        output: [
+          'Context usage:',
+          `  Messages:     ${cs.messageCount}`,
+          `  Tokens (est): ~${cs.estimatedTokens.toLocaleString()} / 100,000`,
+          `  Compaction:   ${cs.shouldCompact ? 'recommended (/compact)' : 'not needed'}`,
+        ].join('\n'),
+      };
     }
 
     case '/clear':

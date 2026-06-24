@@ -15,6 +15,7 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     getTokenUsage: () => ({ input: 100, output: 200 }),
     getSessionDuration: () => 60000,
     getMessageCount: () => 5,
+    getContextStats: () => ({ messageCount: 10, estimatedTokens: 4200, shouldCompact: false }),
     exportSession: vi.fn().mockResolvedValue('Conversation exported to wardayacode-export-test1234.md'),
     exit: vi.fn(),
     undo: vi.fn().mockResolvedValue('Undid edit_file on src/foo.ts'),
@@ -106,6 +107,14 @@ describe('handleSlashCommand', () => {
     const result = await handleSlashCommand('/rename', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('my-test');
+  });
+
+  it('handles /context', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/context', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('4,200');
+    expect(result.output).toContain('not needed');
   });
 
   it('handles /clear', async () => {
@@ -254,6 +263,7 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/theme');
     expect(names).toContain('/export');
     expect(names).toContain('/rename');
+    expect(names).toContain('/context');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');
