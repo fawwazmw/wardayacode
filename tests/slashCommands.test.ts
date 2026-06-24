@@ -32,6 +32,12 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     setTuiRenderer: (r: string) => `TUI renderer set to: ${r}`,
     getDirectories: () => ['/test'],
     addDirectory: vi.fn().mockReturnValue('Added directory: /new'),
+    getAgentConfigSummary: () => 'Model: claude-sonnet-4\nMax tokens: 4096\nTemperature: 0',
+    createBranch: vi.fn().mockResolvedValue('Branch created: test-branch'),
+    listPlugins: () => [],
+    reloadPlugins: vi.fn().mockResolvedValue('Plugins reloaded.'),
+    getSandboxStatus: () => 'Sandbox: disabled',
+    runSecurityReview: vi.fn().mockResolvedValue('Security review: no issues found'),
     getConfigSummary: () => 'Model: claude-sonnet-4\nVersion: 0.5.0\nTheme: dark\nMode: default',
     openKeybindings: vi.fn().mockResolvedValue('Keybindings file: /test/.wardayacode/keybindings.json'),
     exit: vi.fn(),
@@ -360,6 +366,71 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('Rewind');
   });
 
+  it('handles /agents', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/agents', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('claude-sonnet-4');
+  });
+
+  it('handles /branch without arg', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/branch', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Usage');
+  });
+
+  it('handles /branch with name', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/branch my-feature', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.createBranch).toHaveBeenCalledWith('my-feature');
+  });
+
+  it('handles /mcp', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/mcp', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('MCP');
+  });
+
+  it('handles /plugin', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/plugin', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('No plugins');
+  });
+
+  it('handles /reload-plugins', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/reload-plugins', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.reloadPlugins).toHaveBeenCalled();
+  });
+
+  it('handles /review', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/review', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Pull request');
+  });
+
+  it('handles /sandbox', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/sandbox', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Sandbox');
+  });
+
+  it('handles /security-review with diff', async () => {
+    const ctx = createMockContext({
+      diff: vi.fn().mockResolvedValue('diff --git a/src/foo.ts b/src/foo.ts\n+api_key=secret'),
+    });
+    const result = await handleSlashCommand('/security-review', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.runSecurityReview).toHaveBeenCalled();
+  });
+
   it('handles /clear', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/clear', ctx);
@@ -534,6 +605,14 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/add-dir');
     expect(names).toContain('/doctor');
     expect(names).toContain('/rewind');
+    expect(names).toContain('/agents');
+    expect(names).toContain('/branch');
+    expect(names).toContain('/mcp');
+    expect(names).toContain('/plugin');
+    expect(names).toContain('/reload-plugins');
+    expect(names).toContain('/review');
+    expect(names).toContain('/sandbox');
+    expect(names).toContain('/security-review');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

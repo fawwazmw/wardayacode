@@ -41,6 +41,14 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/add-dir', description: 'Add a new working directory' },
   { name: '/doctor', description: 'Diagnose and verify your WardayaCode installation and settings' },
   { name: '/rewind', description: 'Restore the code and/or conversation to a previous point' },
+  { name: '/agents', description: 'Manage agent configurations' },
+  { name: '/branch', description: 'Create a branch of the current conversation at this point', args: '<name>' },
+  { name: '/mcp', description: 'Manage MCP servers' },
+  { name: '/plugin', description: 'Manage WardayaCode plugins' },
+  { name: '/reload-plugins', description: 'Activate pending plugin changes in the current session' },
+  { name: '/review', description: 'Review a pull request' },
+  { name: '/sandbox', description: 'Configure the sandbox' },
+  { name: '/security-review', description: 'Complete a security review of the pending changes on the current branch' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -83,6 +91,12 @@ export interface SlashCommandContext {
   setTuiRenderer: (renderer: string) => string;
   getDirectories: () => string[];
   addDirectory: (dir: string) => string;
+  getAgentConfigSummary: () => string;
+  createBranch: (name: string) => Promise<string>;
+  listPlugins: () => string[];
+  reloadPlugins: () => Promise<string>;
+  getSandboxStatus: () => string;
+  runSecurityReview: () => Promise<string>;
   getSessionId: () => string;
   getSessionName: () => string;
   setSessionName: (name: string) => void;
@@ -382,6 +396,44 @@ export async function handleSlashCommand(
 
     case '/rewind':
       return { handled: true, output: 'Rewind restores code and/or conversation to a previous state.\nUse /checkpoint to create save points, /rollback to restore.' };
+
+    case '/agents':
+      return { handled: true, output: ctx.getAgentConfigSummary() };
+
+    case '/branch': {
+      if (!arg) {
+        return { handled: true, output: 'Usage: /branch <name>\nCreates a git branch with a checkpoint of the current state.' };
+      }
+      return { handled: true, output: await ctx.createBranch(arg) };
+    }
+
+    case '/mcp':
+      return { handled: true, output: 'MCP (Model Context Protocol) servers extend WardayaCode with external tools.\nConfigure them in your config file or .wardayacode/mcp/.' };
+
+    case '/plugin': {
+      const plugins = ctx.listPlugins();
+      if (plugins.length === 0) {
+        return { handled: true, output: 'No plugins loaded.\nPlugins extend WardayaCode with custom functionality.' };
+      }
+      return { handled: true, output: `Loaded plugins:\n  ${plugins.join('\n  ')}` };
+    }
+
+    case '/reload-plugins':
+      return { handled: true, output: await ctx.reloadPlugins() };
+
+    case '/review':
+      return { handled: true, output: 'Pull request review:\nUse `gh pr review` in the terminal or run WardayaCode in review mode with `wardayacode review`.\nUncommitted changes can be viewed with /diff.' };
+
+    case '/sandbox':
+      return { handled: true, output: ctx.getSandboxStatus() };
+
+    case '/security-review': {
+      const diff = await ctx.diff();
+      if (diff === 'No uncommitted changes.' || !diff) {
+        return { handled: true, output: 'No uncommitted changes to review.' };
+      }
+      return { handled: true, output: await ctx.runSecurityReview() };
+    }
 
     case '/clear':
       ctx.clearMessages();

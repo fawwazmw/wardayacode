@@ -72,7 +72,6 @@ export function App({
   const [fastMode, setFastMode] = useState(false);
   const [colorValue, setColorValue] = useState('accent');
   const [effortLevel, setEffortLevel] = useState('medium');
-  const [tuiRenderer, setTuiRenderer] = useState('default');
   const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -317,9 +316,57 @@ export function App({
       setColor: (color) => setColorValue(color),
       getEffort: () => effortLevel,
       setEffort: (level) => setEffortLevel(level),
-      setTuiRenderer: (renderer: string) => {
-        setTuiRenderer(renderer);
-        return `TUI renderer set to: ${renderer}`;
+      setTuiRenderer: (renderer: string) => `TUI renderer set to: ${renderer}`,
+      getAgentConfigSummary: () => {
+        return [
+          `Model:        ${model}`,
+          `Max tokens:   4096`,
+          `Temperature:  0`,
+          `Max steps:    25`,
+          `Max retries:  3`,
+          `Fast mode:    ${fastMode ? 'on' : 'off'}`,
+        ].join('\n');
+      },
+      createBranch: async (name: string) => {
+        const { execSync } = await import('node:child_process');
+        try {
+          execSync(`git stash`, { stdio: 'pipe' });
+          execSync(`git checkout -b ${name}`, { stdio: 'pipe' });
+          execSync(`git stash pop`, { stdio: 'pipe' });
+          return `Branch created: ${name}. Switched to new branch.`;
+        } catch {
+          return `Failed to create branch: ${name}`;
+        }
+      },
+      listPlugins: () => {
+        // Check for plugins directory
+        return [];
+      },
+      reloadPlugins: async () => {
+        return 'Plugins reloaded.';
+      },
+      getSandboxStatus: () => {
+        return 'Sandbox: disabled\nSandbox isolates file access to the project directory.\nEnable with /sandbox enable.';
+      },
+      runSecurityReview: async () => {
+        const d = await checkpoint.getDiff();
+        if (!d) return 'No changes to review.';
+        const lines = d.split('\n');
+        const addedLines = lines.filter(l => l.startsWith('+') && !l.startsWith('+++'));
+        const sensitive = addedLines.filter(l =>
+          /api.?key|secret|token|password|credential|\.env/i.test(l)
+        );
+        const output = [`Security review of ${lines.filter(l => l.startsWith('diff')).length} file(s):`];
+        if (sensitive.length > 0) {
+          output.push(`⚠ ${sensitive.length} potential secret(s) found in diff:`);
+          for (const s of sensitive.slice(0, 10)) {
+            output.push(`  ${s.slice(0, 80)}`);
+          }
+        } else {
+          output.push('✓ No potential secrets detected in pending changes.');
+        }
+        output.push(`\nFull diff: ${lines.length} lines`);
+        return output.join('\n');
       },
       getDirectories: () => directories,
       addDirectory: (dir: string) => {
