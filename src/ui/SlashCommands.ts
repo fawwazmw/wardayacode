@@ -16,6 +16,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/context', description: 'Visualize current context usage stats' },
   { name: '/resume', description: 'Resume a previous conversation', args: '<session-id>' },
   { name: '/init', description: 'Initialize a new WARDAYA.md file with codebase documentation' },
+  { name: '/insights', description: 'Generate a report analyzing your WardayaCode sessions' },
   { name: '/plan', description: 'Switch to plan mode (read-only, no destructive actions)' },
   { name: '/stats', description: 'Show usage statistics and activity for this session' },
   { name: '/fast', description: 'Toggle fast mode for faster model responses' },
@@ -269,6 +270,11 @@ export async function handleSlashCommand(
 
     case '/init':
       return { handled: true, output: await ctx.initWardayaDoc() };
+
+    case '/insights': {
+      const iUsage = ctx.getTokenUsage();
+      return { handled: true, output: `Session insights:\n  Messages: ${ctx.getMessageCount()}\n  Tokens in: ~${iUsage.input}\n  Tokens out: ~${iUsage.output}\n  Model: ${ctx.getModel()}\n  Duration: ${formatDuration(ctx.getSessionDuration())}` };
+    }
 
     case '/plan':
       ctx.setPermissionMode('plan');

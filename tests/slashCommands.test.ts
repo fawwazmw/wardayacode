@@ -164,6 +164,13 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('WARDAYA.md');
   });
 
+  it('handles /insights', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/insights', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Messages: 5');
+  });
+
   it('handles /plan', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/plan', ctx);
@@ -580,6 +587,7 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/context');
     expect(names).toContain('/resume');
     expect(names).toContain('/init');
+    expect(names).toContain('/insights');
     expect(names).toContain('/plan');
     expect(names).toContain('/stats');
     expect(names).toContain('/fast');
