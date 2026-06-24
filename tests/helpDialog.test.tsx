@@ -41,6 +41,19 @@ describe('HelpDialog', () => {
     expect(out).toContain('1–7 of');
   });
 
+  it('flags catalog commands that are not yet implemented', async () => {
+    const { stdin, lastFrame } = render(
+      <HelpDialog themeMode="dark" onClose={vi.fn()} />,
+    );
+    await tick();
+    stdin.write(TAB); await tick();
+    const out = lastFrame() ?? '';
+    // /add-dir isn't in the live registry, so it carries the "(soon)" marker,
+    // and the legend explains it.
+    expect(out).toContain('(soon)');
+    expect(out).toContain('not yet available');
+  });
+
   it('Down arrow scrolls the commands list', async () => {
     const { stdin, lastFrame } = render(
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
