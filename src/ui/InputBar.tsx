@@ -12,6 +12,7 @@ interface InputBarProps {
   isLoading: boolean;
   themeMode: 'dark' | 'light';
   onInterrupt?: () => void;
+  inputDisabled?: boolean;
 }
 
 const MAX_HISTORY = 50;
@@ -21,6 +22,7 @@ export function InputBar({
   isLoading,
   themeMode,
   onInterrupt,
+  inputDisabled = false,
 }: InputBarProps): React.ReactElement {
   const { exit } = useApp();
   const [value, setValue] = useState('');
@@ -74,6 +76,10 @@ export function InputBar({
   }, [value, onSubmit]);
 
   useInput((rawInput, rawKey) => {
+    // While an overlay (e.g. the help dialog) owns the screen, it handles all
+    // keys; swallow input here so we don't double-process Esc/Ctrl+C.
+    if (inputDisabled) return;
+
     // Under the kitty keyboard protocol, Shift+Enter and lone Esc arrive as
     // CSI-u sequences Ink can't parse; map them back to Ink's Key shape so the
     // branches below keep working unchanged.
