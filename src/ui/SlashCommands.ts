@@ -11,6 +11,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/status', description: 'Show WardayaCode status including version, model, account, API connectivity, and tool statuses' },
   { name: '/cost', description: 'Show total cost and duration of the current session' },
   { name: '/theme', description: 'Change the theme', args: '<dark|light>' },
+  { name: '/export', description: 'Export the current conversation to a file' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -45,6 +46,7 @@ export interface SlashCommandContext {
   getTokenUsage: () => { input: number; output: number };
   getSessionDuration: () => number;
   getMessageCount: () => number;
+  exportSession: () => Promise<string>;
   exit: () => void;
   undo: () => Promise<string>;
   checkpoint: () => Promise<string>;
@@ -153,6 +155,9 @@ export async function handleSlashCommand(
       }
       return { handled: true, output: 'Usage: /theme <dark|light>' };
     }
+
+    case '/export':
+      return { handled: true, output: await ctx.exportSession() };
 
     case '/clear':
       ctx.clearMessages();

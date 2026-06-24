@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Box, useApp, useInput } from 'ink';
+import fs from 'fs/promises';
+import path from 'path';
 import type { Agent } from '../agent/index.js';
 import type { Session } from '../session/Session.js';
 import type { PermissionMode } from '../types.js';
@@ -232,6 +234,14 @@ export function App({
       getTokenUsage: () => tokenUsage,
       getSessionDuration: () => Date.now() - sessionStartRef.current,
       getMessageCount: () => messages.length,
+      exportSession: async () => {
+        const content = await session.export();
+        const cwd = process.cwd();
+        const filename = `wardayacode-export-${session.getId().slice(0, 8)}.md`;
+        const filepath = path.join(cwd, filename);
+        await fs.writeFile(filepath, content, 'utf-8');
+        return `Conversation exported to ${filename}`;
+      },
       exit,
       undo: async () => {
         const result = await undoManager.undo();
