@@ -17,6 +17,11 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     getMessageCount: () => 5,
     getContextStats: () => ({ messageCount: 10, estimatedTokens: 4200, shouldCompact: false }),
     exportSession: vi.fn().mockResolvedValue('Conversation exported to wardayacode-export-test1234.md'),
+    listSessions: vi.fn().mockResolvedValue([
+      { id: 'abc123', createdAt: new Date('2024-01-01'), messageCount: 42, firstMessage: 'hello' },
+    ]),
+    resumeSession: vi.fn().mockResolvedValue('Resumed session abc123 (42 messages)'),
+    initWardayaDoc: vi.fn().mockResolvedValue('WARDAYA.md created in /test'),
     exit: vi.fn(),
     undo: vi.fn().mockResolvedValue('Undid edit_file on src/foo.ts'),
     checkpoint: vi.fn().mockResolvedValue('Checkpoint created (git stash).'),
@@ -115,6 +120,30 @@ describe('handleSlashCommand', () => {
     expect(result.handled).toBe(true);
     expect(result.output).toContain('4,200');
     expect(result.output).toContain('not needed');
+  });
+
+  it('handles /resume listing sessions', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/resume', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.listSessions).toHaveBeenCalled();
+    expect(result.output).toContain('abc123');
+  });
+
+  it('handles /resume with session id', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/resume abc123', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.resumeSession).toHaveBeenCalledWith('abc123');
+    expect(result.output).toContain('abc123');
+  });
+
+  it('handles /init', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/init', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.initWardayaDoc).toHaveBeenCalled();
+    expect(result.output).toContain('WARDAYA.md');
   });
 
   it('handles /clear', async () => {
@@ -264,6 +293,8 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/export');
     expect(names).toContain('/rename');
     expect(names).toContain('/context');
+    expect(names).toContain('/resume');
+    expect(names).toContain('/init');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

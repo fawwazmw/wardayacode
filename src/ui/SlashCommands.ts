@@ -14,6 +14,8 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/export', description: 'Export the current conversation to a file' },
   { name: '/rename', description: 'Rename the current conversation', args: '<name>' },
   { name: '/context', description: 'Visualize current context usage stats' },
+  { name: '/resume', description: 'Resume a previous conversation', args: '<session-id>' },
+  { name: '/init', description: 'Initialize a new WARDAYA.md file with codebase documentation' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -37,6 +39,13 @@ export function filterCommands(input: string): SlashCommandEntry[] {
   return SLASH_COMMANDS.filter(cmd => cmd.name.startsWith(query));
 }
 
+export interface SessionListInfo {
+  id: string;
+  createdAt: Date;
+  messageCount: number;
+  firstMessage?: string;
+}
+
 export interface SlashCommandContext {
   clearMessages: () => void;
   setPermissionMode: (mode: PermissionMode) => void;
@@ -52,6 +61,9 @@ export interface SlashCommandContext {
   getMessageCount: () => number;
   getContextStats: () => { messageCount: number; estimatedTokens: number; shouldCompact: boolean };
   exportSession: () => Promise<string>;
+  listSessions: () => Promise<SessionListInfo[]>;
+  resumeSession: (sessionId: string) => Promise<string>;
+  initWardayaDoc: () => Promise<string>;
   exit: () => void;
   undo: () => Promise<string>;
   checkpoint: () => Promise<string>;
@@ -186,6 +198,26 @@ export async function handleSlashCommand(
         ].join('\n'),
       };
     }
+
+    case '/resume': {
+      if (!arg) {
+        const sessions = await ctx.listSessions();
+        if (sessions.length === 0) {
+          return { handled: true, output: 'No previous sessions found.' };
+        }
+        const lines = sessions.map(s => {
+          const date = s.createdAt.toLocaleDateString();
+          const idShort = s.id.slice(0, 8);
+          const preview = s.firstMessage ? ` — "${s.firstMessage}"` : '';
+          return `  ${idShort}  ${date}  ${s.messageCount} msgs${preview}`;
+        });
+        return { handled: true, output: `Available sessions:\n${lines.join('\n')}\n\nUse /resume <session-id-prefix> to load one.` };
+      }
+      return { handled: true, output: await ctx.resumeSession(arg) };
+    }
+
+    case '/init':
+      return { handled: true, output: await ctx.initWardayaDoc() };
 
     case '/clear':
       ctx.clearMessages();
