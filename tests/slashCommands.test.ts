@@ -10,6 +10,7 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     getVersion: () => '0.5.0',
     getPermissionMode: () => 'default',
     getTokenUsage: () => ({ input: 100, output: 200 }),
+    getSessionDuration: () => 60000,
     getMessageCount: () => 5,
     exit: vi.fn(),
     undo: vi.fn().mockResolvedValue('Undid edit_file on src/foo.ts'),
@@ -45,6 +46,17 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('default');
     expect(result.output).toContain('test-session-id-1234');
     expect(result.output).toContain('Messages: 5');
+  });
+
+  it('handles /cost', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/cost', ctx);
+    expect(result.handled).toBe(true);
+    // 100 input @ $3/M + 200 output @ $15/M
+    expect(result.output).toContain('$0.0003');
+    expect(result.output).toContain('$0.0030');
+    expect(result.output).toContain('$0.0033');
+    expect(result.output).toContain('Duration: 1m');
   });
 
   it('handles /clear', async () => {
@@ -189,6 +201,7 @@ describe('SLASH_COMMANDS registry', () => {
     const names = SLASH_COMMANDS.map(c => c.name);
     expect(names).toContain('/help');
     expect(names).toContain('/status');
+    expect(names).toContain('/cost');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

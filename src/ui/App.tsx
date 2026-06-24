@@ -62,6 +62,7 @@ export function App({
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const contextManagerRef = useRef<ContextManager>(new ContextManager(process.cwd()));
+  const sessionStartRef = useRef(Date.now());
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -227,6 +228,7 @@ export function App({
       getVersion: () => version,
       getPermissionMode: () => currentPermissionMode,
       getTokenUsage: () => tokenUsage,
+      getSessionDuration: () => Date.now() - sessionStartRef.current,
       getMessageCount: () => messages.length,
       exit,
       undo: async () => {

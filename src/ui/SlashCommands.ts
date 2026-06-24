@@ -9,6 +9,7 @@ export interface SlashCommandEntry {
 export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/help', description: 'Show available commands' },
   { name: '/status', description: 'Show WardayaCode status including version, model, account, API connectivity, and tool statuses' },
+  { name: '/cost', description: 'Show total cost and duration of the current session' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -40,6 +41,7 @@ export interface SlashCommandContext {
   getVersion: () => string;
   getPermissionMode: () => PermissionMode;
   getTokenUsage: () => { input: number; output: number };
+  getSessionDuration: () => number;
   getMessageCount: () => number;
   exit: () => void;
   undo: () => Promise<string>;
@@ -55,6 +57,36 @@ export interface SlashCommandResult {
 }
 
 const VALID_MODES: PermissionMode[] = ['default', 'plan', 'acceptEdits', 'auto', 'internal'];
+
+/** Per-million-token pricing for cost estimation. Falls back to Sonnet for unknown models. */
+function estimateCost(model: string, inputTokens: number, outputTokens: number): { inputCost: number; outputCost: number; totalCost: number; inputRate: number; outputRate: number } {
+  const m = model.toLowerCase();
+  let inputRate: number;
+  let outputRate: number;
+  if (m.startsWith('claude-opus')) {
+    inputRate = 15;
+    outputRate = 75;
+  } else if (m.startsWith('claude-haiku')) {
+    inputRate = 0.25;
+    outputRate = 1.25;
+  } else {
+    // claude-sonnet (or unknown) default
+    inputRate = 3;
+    outputRate = 15;
+  }
+  const inputCost = (inputTokens / 1_000_000) * inputRate;
+  const outputCost = (outputTokens / 1_000_000) * outputRate;
+  return { inputCost, outputCost, totalCost: inputCost + outputCost, inputRate, outputRate };
+}
+
+/** Format a duration in milliseconds to a human-readable string like "5m 32s". */
+function formatDuration(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
+}
 
 export async function handleSlashCommand(
   input: string,
@@ -92,6 +124,22 @@ export async function handleSlashCommand(
         `Session:  ${ctx.getSessionId()}`,
         `Messages: ${ctx.getMessageCount()}`,
         `Tokens:   ~${sUsage.input} in / ~${sUsage.output} out`,
+      ];
+      return { handled: true, output: lines.join('\n') };
+    }
+
+    case '/cost': {
+      const cModel = ctx.getModel();
+      const cUsage = ctx.getTokenUsage();
+      const { inputCost, outputCost, totalCost, inputRate, outputRate } = estimateCost(cModel, cUsage.input, cUsage.output);
+      const fmt = (n: number) => n.toFixed(4);
+      const dur = formatDuration(ctx.getSessionDuration());
+      const lines = [
+        `Cost estimate (${cModel}):`,
+        `  Input:  ~${cUsage.input.toLocaleString()} tokens × $${inputRate.toFixed(2)}/M = $${fmt(inputCost)}`,
+        `  Output: ~${cUsage.output.toLocaleString()} tokens × $${outputRate.toFixed(2)}/M = $${fmt(outputCost)}`,
+        `  Total:                                       $${fmt(totalCost)}`,
+        `  Duration: ${dur}`,
       ];
       return { handled: true, output: lines.join('\n') };
     }
