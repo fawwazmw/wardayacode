@@ -24,6 +24,9 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     initWardayaDoc: vi.fn().mockResolvedValue('WARDAYA.md created in /test'),
     getFastMode: () => false,
     setFastMode: vi.fn(),
+    getColor: () => 'accent',
+    setColor: vi.fn(),
+    copyLastResponse: vi.fn().mockResolvedValue('Last response: Hello!'),
     getConfigSummary: () => 'Model: claude-sonnet-4\nVersion: 0.5.0\nTheme: dark\nMode: default',
     openKeybindings: vi.fn().mockResolvedValue('Keybindings file: /test/.wardayacode/keybindings.json'),
     exit: vi.fn(),
@@ -190,6 +193,49 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('keybindings.json');
   });
 
+  it('handles /color without arg', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/color', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('accent');
+  });
+
+  it('handles /color with arg', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/color blue', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.setColor).toHaveBeenCalledWith('blue');
+  });
+
+  it('handles /skills', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/skills', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('planning');
+  });
+
+  it('handles /release-notes', async () => {
+    const ctx = createMockContext({ getVersion: () => '0.5.0' });
+    const result = await handleSlashCommand('/release-notes', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('0.5.0');
+    expect(result.output).toContain('github.com');
+  });
+
+  it('handles /recap', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/recap', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('5 msgs');
+  });
+
+  it('handles /copy', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/copy', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.copyLastResponse).toHaveBeenCalled();
+  });
+
   it('handles /clear', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/clear', ctx);
@@ -344,6 +390,11 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/fast');
     expect(names).toContain('/config');
     expect(names).toContain('/keybindings');
+    expect(names).toContain('/color');
+    expect(names).toContain('/skills');
+    expect(names).toContain('/release-notes');
+    expect(names).toContain('/recap');
+    expect(names).toContain('/copy');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

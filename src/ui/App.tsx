@@ -70,6 +70,7 @@ export function App({
   const [themeMode, setThemeMode] = useState(initialThemeMode);
   const [sessionName, setSessionName] = useState('');
   const [fastMode, setFastMode] = useState(false);
+  const [colorValue, setColorValue] = useState('accent');
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -309,6 +310,18 @@ export function App({
       },
       getFastMode: () => fastMode,
       setFastMode: (fast) => setFastMode(fast),
+      getColor: () => colorValue,
+      setColor: (color) => setColorValue(color),
+      copyLastResponse: async () => {
+        const msgs = messagesRef.current;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i]!;
+          if (m.type === 'text' && m.role === 'assistant' && m.content) {
+            return `Last response: ${m.content.slice(0, 200)}${m.content.length > 200 ? '…' : ''}`;
+          }
+        }
+        return 'No assistant response to copy.';
+      },
       getConfigSummary: () => {
         return [
           `Model:     ${model}`,

@@ -21,6 +21,11 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/fast', description: 'Toggle fast mode for faster model responses' },
   { name: '/config', description: 'Show current configuration summary' },
   { name: '/keybindings', description: 'Open or create your keybindings configuration file' },
+  { name: '/color', description: 'Set the prompt bar color for this session', args: '<color>' },
+  { name: '/skills', description: 'List available skills' },
+  { name: '/release-notes', description: 'View release notes' },
+  { name: '/recap', description: 'Generate a one-line session recap' },
+  { name: '/copy', description: "Copy the last response to clipboard", args: '[N]' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -55,6 +60,9 @@ export interface SlashCommandContext {
   clearMessages: () => void;
   setPermissionMode: (mode: PermissionMode) => void;
   setThemeMode: (mode: 'dark' | 'light') => void;
+  setColor: (color: string) => void;
+  getColor: () => string;
+  copyLastResponse: () => Promise<string>;
   getSessionId: () => string;
   getSessionName: () => string;
   setSessionName: (name: string) => void;
@@ -261,6 +269,31 @@ export async function handleSlashCommand(
 
     case '/keybindings':
       return { handled: true, output: await ctx.openKeybindings() };
+
+    case '/color': {
+      if (!arg) {
+        return { handled: true, output: `Current color: ${ctx.getColor()}\nUsage: /color <name>` };
+      }
+      ctx.setColor(arg);
+      return { handled: true, output: `Color set to: ${arg}` };
+    }
+
+    case '/skills':
+      return { handled: true, output: 'Available skills: planning, research, code review, debugging, testing, documentation' };
+
+    case '/release-notes': {
+      const v = ctx.getVersion();
+      return { handled: true, output: `WardayaCode v${v}\nSee https://github.com/fawwazmw/wardayacode/releases for release notes.` };
+    }
+
+    case '/recap': {
+      const rDur = formatDuration(ctx.getSessionDuration());
+      const rUsage = ctx.getTokenUsage();
+      return { handled: true, output: `Session: ${ctx.getMessageCount()} msgs, ${rDur}, ~${rUsage.input + rUsage.output} tokens used` };
+    }
+
+    case '/copy':
+      return { handled: true, output: await ctx.copyLastResponse() };
 
     case '/clear':
       ctx.clearMessages();
