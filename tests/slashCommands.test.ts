@@ -236,6 +236,41 @@ describe('handleSlashCommand', () => {
     expect(ctx.copyLastResponse).toHaveBeenCalled();
   });
 
+  it('handles /feedback', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/feedback', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('github.com');
+  });
+
+  it('handles /tasks', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/tasks', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('No active tasks');
+  });
+
+  it('handles /statusline', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/statusline', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Status line');
+  });
+
+  it('handles /hooks', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/hooks', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Hooks');
+  });
+
+  it('handles /memory', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/memory', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('~/.claude/memory');
+  });
+
   it('handles /clear', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/clear', ctx);
@@ -395,6 +430,11 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/release-notes');
     expect(names).toContain('/recap');
     expect(names).toContain('/copy');
+    expect(names).toContain('/feedback');
+    expect(names).toContain('/tasks');
+    expect(names).toContain('/statusline');
+    expect(names).toContain('/hooks');
+    expect(names).toContain('/memory');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

@@ -26,6 +26,11 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/release-notes', description: 'View release notes' },
   { name: '/recap', description: 'Generate a one-line session recap' },
   { name: '/copy', description: "Copy the last response to clipboard", args: '[N]' },
+  { name: '/feedback', description: 'Submit feedback about WardayaCode' },
+  { name: '/tasks', description: 'List and manage background tasks' },
+  { name: '/statusline', description: "Set up WardayaCode's status line UI" },
+  { name: '/hooks', description: 'View hook configurations for tool events' },
+  { name: '/memory', description: 'Edit Wardaya memory files' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -294,6 +299,21 @@ export async function handleSlashCommand(
 
     case '/copy':
       return { handled: true, output: await ctx.copyLastResponse() };
+
+    case '/feedback':
+      return { handled: true, output: 'Feedback: https://github.com/fawwazmw/wardayacode/issues/new/choose' };
+
+    case '/tasks':
+      return { handled: true, output: 'Background tasks:\n  No active tasks. Use /run or & prefix to start tasks.' };
+
+    case '/statusline':
+      return { handled: true, output: 'Status line shows model, mode, tokens, and session info.\nUse /config to see current settings.' };
+
+    case '/hooks':
+      return { handled: true, output: 'Hooks are shell commands that run on tool events.\nConfigure them in .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.' };
+
+    case '/memory':
+      return { handled: true, output: 'Wardaya memory files are stored in ~/.claude/memory/\nUse /memory <topic> to edit or view memory entries.' };
 
     case '/clear':
       ctx.clearMessages();
