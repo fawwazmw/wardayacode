@@ -73,6 +73,7 @@ export function App({
   const [colorValue, setColorValue] = useState('accent');
   const [effortLevel, setEffortLevel] = useState('medium');
   const [tuiRenderer, setTuiRenderer] = useState('default');
+  const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -319,6 +320,11 @@ export function App({
       setTuiRenderer: (renderer: string) => {
         setTuiRenderer(renderer);
         return `TUI renderer set to: ${renderer}`;
+      },
+      getDirectories: () => directories,
+      addDirectory: (dir: string) => {
+        setDirectories(prev => prev.includes(dir) ? prev : [...prev, dir]);
+        return `Added directory: ${dir}`;
       },
       copyLastResponse: async () => {
         const msgs = messagesRef.current;

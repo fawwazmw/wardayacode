@@ -30,6 +30,8 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     getEffort: () => 'medium',
     setEffort: vi.fn(),
     setTuiRenderer: (r: string) => `TUI renderer set to: ${r}`,
+    getDirectories: () => ['/test'],
+    addDirectory: vi.fn().mockReturnValue('Added directory: /new'),
     getConfigSummary: () => 'Model: claude-sonnet-4\nVersion: 0.5.0\nTheme: dark\nMode: default',
     openKeybindings: vi.fn().mockResolvedValue('Keybindings file: /test/.wardayacode/keybindings.json'),
     exit: vi.fn(),
@@ -316,6 +318,48 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('stickers');
   });
 
+  it('handles /permissions', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/permissions', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Permission mode');
+  });
+
+  it('handles /team-onboarding', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/team-onboarding', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('onboarding');
+  });
+
+  it('handles /add-dir without arg', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/add-dir', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('/test');
+  });
+
+  it('handles /add-dir with path', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/add-dir /new', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.addDirectory).toHaveBeenCalledWith('/new');
+  });
+
+  it('handles /doctor', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/doctor', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('diagnostics');
+  });
+
+  it('handles /rewind', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/rewind', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Rewind');
+  });
+
   it('handles /clear', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/clear', ctx);
@@ -485,6 +529,11 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/tui');
     expect(names).toContain('/ide');
     expect(names).toContain('/stickers');
+    expect(names).toContain('/permissions');
+    expect(names).toContain('/team-onboarding');
+    expect(names).toContain('/add-dir');
+    expect(names).toContain('/doctor');
+    expect(names).toContain('/rewind');
     expect(names).toContain('/clear');
     expect(names).toContain('/login');
     expect(names).toContain('/logout');

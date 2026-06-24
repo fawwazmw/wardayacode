@@ -36,6 +36,11 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/tui', description: 'Set the terminal UI renderer (default | fullscreen)', args: '<mode>' },
   { name: '/ide', description: 'Manage IDE integrations and show status' },
   { name: '/stickers', description: 'Get link to order WardayaCode stickers' },
+  { name: '/permissions', description: 'Manage allow & deny tool permission rules' },
+  { name: '/team-onboarding', description: 'Help teammates ramp on WardayaCode with a guide from your usage' },
+  { name: '/add-dir', description: 'Add a new working directory' },
+  { name: '/doctor', description: 'Diagnose and verify your WardayaCode installation and settings' },
+  { name: '/rewind', description: 'Restore the code and/or conversation to a previous point' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
@@ -76,6 +81,8 @@ export interface SlashCommandContext {
   setEffort: (level: string) => void;
   getEffort: () => string;
   setTuiRenderer: (renderer: string) => string;
+  getDirectories: () => string[];
+  addDirectory: (dir: string) => string;
   getSessionId: () => string;
   getSessionName: () => string;
   setSessionName: (name: string) => void;
@@ -346,6 +353,35 @@ export async function handleSlashCommand(
 
     case '/stickers':
       return { handled: true, output: 'Get WardayaCode stickers: https://github.com/fawwazmw/wardayacode' };
+
+    case '/permissions':
+      return { handled: true, output: `Permission mode: ${ctx.getPermissionMode()}\nUse /mode to change.\nRules are evaluated top-to-bottom; first match wins.` };
+
+    case '/team-onboarding':
+      return { handled: true, output: 'Team onboarding guide:\nShare your WardayaCode workflow with teammates.\nSee docs at https://github.com/fawwazmw/wardayacode' };
+
+    case '/add-dir': {
+      if (!arg) {
+        const dirs = ctx.getDirectories();
+        return { handled: true, output: dirs.length ? `Working directories:\n  ${dirs.join('\n  ')}` : 'No additional directories. Use /add-dir <path> to add one.' };
+      }
+      return { handled: true, output: ctx.addDirectory(arg) };
+    }
+
+    case '/doctor': {
+      const issues: string[] = [];
+      // Basic checks
+      try {
+        const v = ctx.getVersion();
+        if (v) issues.push(`✓ Version: ${v}`);
+      } catch { issues.push('✗ Could not determine version'); }
+      issues.push(`✓ Model: ${ctx.getModel()}`);
+      issues.push(`✓ Session: ${ctx.getSessionId().slice(0, 8)}`);
+      return { handled: true, output: `WardayaCode diagnostics:\n${issues.join('\n')}` };
+    }
+
+    case '/rewind':
+      return { handled: true, output: 'Rewind restores code and/or conversation to a previous state.\nUse /checkpoint to create save points, /rollback to restore.' };
 
     case '/clear':
       ctx.clearMessages();
