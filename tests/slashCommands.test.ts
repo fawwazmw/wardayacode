@@ -46,6 +46,11 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     rollback: vi.fn().mockResolvedValue('Rolled back to last checkpoint.'),
     diff: vi.fn().mockResolvedValue(' src/foo.ts | 2 +-'),
     compact: vi.fn().mockResolvedValue('Context compacted: 2 layer(s) applied, ~1,234 tokens remaining.'),
+    openUrl: vi.fn().mockResolvedValue('Opened in browser: https://github.com/fawwazmw/wardayacode/issues/new/choose'),
+    getProjectRoot: () => '/test',
+    addTask: vi.fn().mockReturnValue(1),
+    listTasks: () => [],
+    clearTasks: vi.fn().mockReturnValue('All tasks cleared.'),
     ...overrides,
   };
 }
