@@ -130,6 +130,14 @@ export interface SlashCommandContext {
   listTasks: () => { id: number; desc: string; status: string }[];
   /** Clear a task by id, or all tasks if no id. */
   clearTasks: (id?: number) => string;
+  /** Scan the project for plugin files. Returns file paths relative to project root. */
+  scanPlugins: () => string[];
+  /** Scan the project for MCP configs. Returns file paths relative to project root. */
+  scanMcpConfigs: () => string[];
+  /** Enable or disable the sandbox. */
+  setSandboxEnabled: (enabled: boolean) => void;
+  /** Get sandbox enabled state. */
+  getSandboxEnabled: () => boolean;
 }
 
 export interface SlashCommandResult {
@@ -449,11 +457,16 @@ export async function handleSlashCommand(
       return { handled: true, output: await ctx.createBranch(arg) };
     }
 
-    case '/mcp':
-      return { handled: true, output: 'MCP (Model Context Protocol) servers extend WardayaCode with external tools.\nConfigure them in your config file or .wardayacode/mcp/.' };
+    case '/mcp': {
+      const configs = ctx.scanMcpConfigs();
+      if (configs.length === 0) {
+        return { handled: true, output: 'No MCP server configs found.\nMCP (Model Context Protocol) servers extend WardayaCode with external tools.\nAdd configs to .wardayacode/mcp/.' };
+      }
+      return { handled: true, output: `MCP server configs:\n  ${configs.join('\n  ')}\nUse /plugin to manage plugins.` };
+    }
 
     case '/plugin': {
-      const plugins = ctx.listPlugins();
+      const plugins = ctx.scanPlugins();
       if (plugins.length === 0) {
         return { handled: true, output: 'No plugins loaded.\nPlugins extend WardayaCode with custom functionality.' };
       }
@@ -466,8 +479,18 @@ export async function handleSlashCommand(
     case '/review':
       return { handled: true, output: 'Pull request review:\nUse `gh pr review` in the terminal or run WardayaCode in review mode with `wardayacode review`.\nUncommitted changes can be viewed with /diff.' };
 
-    case '/sandbox':
-      return { handled: true, output: ctx.getSandboxStatus() };
+    case '/sandbox': {
+      const enabled = ctx.getSandboxEnabled();
+      if (arg === 'enable') {
+        ctx.setSandboxEnabled(true);
+        return { handled: true, output: 'Sandbox enabled. File access is restricted to the project directory.' };
+      }
+      if (arg === 'disable') {
+        ctx.setSandboxEnabled(false);
+        return { handled: true, output: 'Sandbox disabled. File access is unrestricted.' };
+      }
+      return { handled: true, output: `Sandbox: ${enabled ? 'enabled' : 'disabled'}\nThe sandbox restricts file operations to the project directory.\nUse /sandbox enable or /sandbox disable.` };
+    }
 
     case '/security-review': {
       const diff = await ctx.diff();

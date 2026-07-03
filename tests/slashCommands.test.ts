@@ -51,6 +51,10 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     addTask: vi.fn().mockReturnValue(1),
     listTasks: () => [],
     clearTasks: vi.fn().mockReturnValue('All tasks cleared.'),
+    scanPlugins: () => [],
+    scanMcpConfigs: () => [],
+    setSandboxEnabled: vi.fn(),
+    getSandboxEnabled: () => false,
     ...overrides,
   };
 }

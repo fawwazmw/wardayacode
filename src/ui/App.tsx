@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Box, useApp, useInput } from 'ink';
 import fs from 'fs/promises';
+import { existsSync, readdirSync } from 'fs';
 import path from 'path';
 import type { Agent } from '../agent/index.js';
 import type { Session } from '../session/Session.js';
@@ -74,6 +75,7 @@ export function App({
   const [effortLevel, setEffortLevel] = useState('medium');
   const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
+  const [sandboxEnabled, setSandboxEnabled] = useState(false);
   const [tasks, setTasks] = useState<{ id: number; desc: string; status: string }[]>([]);
   const taskIdCounter = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -355,9 +357,31 @@ export function App({
       reloadPlugins: async () => {
         return 'Plugins reloaded.';
       },
-      getSandboxStatus: () => {
-        return 'Sandbox: disabled\nSandbox isolates file access to the project directory.\nEnable with /sandbox enable.';
+      scanPlugins: () => {
+        try {
+          const pluginDir = path.join(process.cwd(), '.wardayacode', 'plugins');
+          if (!existsSync(pluginDir)) return [];
+          const files = readdirSync(pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.mjs'));
+          return files.map(f => path.join('.wardayacode', 'plugins', f));
+        } catch {
+          return [];
+        }
       },
+      scanMcpConfigs: () => {
+        try {
+          const mcpDir = path.join(process.cwd(), '.wardayacode', 'mcp');
+          if (!existsSync(mcpDir)) return [];
+          const files = readdirSync(mcpDir).filter(f => f.endsWith('.json'));
+          return files.map(f => path.join('.wardayacode', 'mcp', f));
+        } catch {
+          return [];
+        }
+      },
+      getSandboxStatus: () => {
+        return `Sandbox: ${sandboxEnabled ? 'enabled' : 'disabled'}\nSandbox isolates file access to the project directory.\nEnable with /sandbox enable.`;
+      },
+      getSandboxEnabled: () => sandboxEnabled,
+      setSandboxEnabled: (enabled: boolean) => setSandboxEnabled(enabled),
       runSecurityReview: async () => {
         const d = await checkpoint.getDiff();
         if (!d) return 'No changes to review.';
