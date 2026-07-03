@@ -122,6 +122,14 @@ export interface SlashCommandContext {
   rollback: () => Promise<string>;
   diff: () => Promise<string>;
   compact: () => Promise<string>;
+  openUrl: (url: string) => Promise<string>;
+  getProjectRoot: () => string;
+  /** Add a background task and return an ID. */
+  addTask: (description: string) => number;
+  /** List all tasks with status. Returns [{id, desc, status}]. */
+  listTasks: () => { id: number; desc: string; status: string }[];
+  /** Clear a task by id, or all tasks if no id. */
+  clearTasks: (id?: number) => string;
 }
 
 export interface SlashCommandResult {
@@ -336,10 +344,25 @@ export async function handleSlashCommand(
       return { handled: true, output: await ctx.copyLastResponse() };
 
     case '/feedback':
-      return { handled: true, output: 'Feedback: https://github.com/fawwazmw/wardayacode/issues/new/choose' };
+      return { handled: true, output: await ctx.openUrl('https://github.com/fawwazmw/wardayacode/issues/new/choose') };
 
-    case '/tasks':
-      return { handled: true, output: 'Background tasks:\n  No active tasks. Use /run or & prefix to start tasks.' };
+    case '/tasks': {
+      if (arg === 'clear') {
+        return { handled: true, output: ctx.clearTasks() };
+      }
+      const taskId = arg ? Number(arg) : undefined;
+      if (taskId !== undefined && !Number.isNaN(taskId)) {
+        return { handled: true, output: ctx.clearTasks(taskId) };
+      }
+      const tasks = ctx.listTasks();
+      if (tasks.length === 0) {
+        return { handled: true, output: 'Background tasks:\n  No active tasks.' };
+      }
+      return {
+        handled: true,
+        output: `Background tasks (${tasks.length}):\n${tasks.map(t => `  [${t.id}] ${t.desc} — ${t.status}`).join('\n')}\nUse /tasks <id> to clear a task, /tasks clear to clear all.`,
+      };
+    }
 
     case '/statusline':
       return { handled: true, output: 'Status line shows model, mode, tokens, and session info.\nUse /config to see current settings.' };
@@ -368,8 +391,21 @@ export async function handleSlashCommand(
       return { handled: true, output: ctx.setTuiRenderer(arg) };
     }
 
-    case '/ide':
-      return { handled: true, output: 'IDE integrations:\n  WardayaCode supports VS Code and JetBrains IDEs.\n  Use /ide <vscode|jetbrains> to set up.' };
+    case '/ide': {
+      const root = ctx.getProjectRoot();
+      const { existsSync } = await import('fs');
+      const { join } = await import('path');
+      const hasVscode = root ? existsSync(join(root, '.vscode')) : false;
+      const hasJetbrains = root ? existsSync(join(root, '.idea')) : false;
+      const lines = ['IDE integrations:'];
+      lines.push(`  VS Code:    ${hasVscode ? '✓ .vscode/ detected' : '— not detected'}`);
+      lines.push(`  JetBrains:  ${hasJetbrains ? '✓ .idea/ detected' : '— not detected'}`);
+      if (!hasVscode && !hasJetbrains) {
+        lines.push('');
+        lines.push('  No IDE config found in the project root.');
+      }
+      return { handled: true, output: lines.join('\n') };
+    }
 
     case '/stickers':
       return { handled: true, output: 'Get WardayaCode stickers: https://github.com/fawwazmw/wardayacode' };
