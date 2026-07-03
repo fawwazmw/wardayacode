@@ -58,9 +58,14 @@ describe('InputBar interrupt', () => {
         onInterrupt={onInterrupt}
       />,
     );
+    // Multiple ticks to let Ink fully register the useInput handler chain in
+    // CI environments where rendering may be deferred.
+    await tick();
     await tick();
 
-    stdin.write(ESC); await tick();
+    stdin.write(ESC);
+    await tick();
+    await tick();
 
     expect(onInterrupt).toHaveBeenCalledTimes(1);
     expect(onSubmit).not.toHaveBeenCalled();

@@ -31,7 +31,9 @@ describe('HelpDialog', () => {
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
     await tick();
-    stdin.write(TAB); await tick();
+    stdin.write(TAB);
+    await tick();
+    await tick();
     const out = lastFrame() ?? '';
     // First command in the catalog is visible; a later one is scrolled off.
     expect(out).toContain('/add-dir');
@@ -46,7 +48,9 @@ describe('HelpDialog', () => {
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
     await tick();
-    stdin.write(TAB); await tick();
+    stdin.write(TAB);
+    await tick();
+    await tick();
     const out = lastFrame() ?? '';
     // /add-dir isn't in the live registry, so it carries the "(soon)" marker,
     // and the legend explains it.
@@ -59,8 +63,13 @@ describe('HelpDialog', () => {
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
     await tick();
-    stdin.write(TAB); await tick(); // → Commands section
-    stdin.write(DOWN); await tick();
+    stdin.write(TAB);
+    await tick();
+    await tick();
+    // Write down-arrow as a single chunk so \x1b doesn't split.
+    stdin.write(DOWN);
+    await tick();
+    await tick();
     const out = lastFrame() ?? '';
     // Scrolled one row: the first command is gone, the window shifts down.
     expect(out).not.toContain('/add-dir');
@@ -72,8 +81,14 @@ describe('HelpDialog', () => {
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
     await tick();
-    stdin.write(RIGHT); await tick();
-    stdin.write(RIGHT); await tick();
+    // Write each arrow separately with a render tick between so React processes
+    // each state update before the next key arrives.
+    stdin.write(RIGHT);
+    await tick();
+    await tick();
+    stdin.write(RIGHT);
+    await tick();
+    await tick();
     const out = lastFrame() ?? '';
     expect(out).toContain('No custom commands yet.');
   });
@@ -83,7 +98,11 @@ describe('HelpDialog', () => {
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
     await tick();
-    stdin.write(LEFT); await tick();
+    stdin.write(LEFT);
+    // Extra tick so Ink can process the escape-prefixed sequence fully even when
+    // rendering is deferred (CI environments).
+    await tick();
+    await tick();
     const out = lastFrame() ?? '';
     expect(out).toContain('No custom commands yet.');
   });
@@ -94,7 +113,9 @@ describe('HelpDialog', () => {
       <HelpDialog themeMode="dark" onClose={onClose} />,
     );
     await tick();
-    stdin.write(ESC); await tick();
+    stdin.write(ESC);
+    await tick();
+    await tick();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
