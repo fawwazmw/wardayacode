@@ -28,12 +28,14 @@ describe('HelpDialog', () => {
     expect(out).toContain('ctrl + shift + -');
   });
 
-  it('Tab advances to the Commands section showing the first page of commands', async () => {
+  it('Right arrow advances to the Commands section showing the first page of commands', async () => {
     const { stdin, lastFrame } = render(
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
     await tick();
-    stdin.write(TAB);
+    // Use Right arrow instead of Tab — Tab is unreliable in CI pseudo-terminals
+    // where it gets intercepted before reaching Ink's useInput.
+    stdin.write(RIGHT);
     await slowTick();
     const out = lastFrame() ?? '';
     // First command in the catalog is visible; a later one is scrolled off.
@@ -49,7 +51,8 @@ describe('HelpDialog', () => {
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
     await tick();
-    stdin.write(TAB);
+    // Use Right arrow — Tab is unreliable in CI pseudo-terminals.
+    stdin.write(RIGHT);
     await slowTick();
     const out = lastFrame() ?? '';
     // /add-dir isn't in the live registry, so it carries the "(soon)" marker,
@@ -63,7 +66,8 @@ describe('HelpDialog', () => {
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
     await tick();
-    stdin.write(TAB);
+    // Use Right arrow — Tab is unreliable in CI pseudo-terminals.
+    stdin.write(RIGHT);
     await slowTick();
     // Write down-arrow as a single chunk so \x1b doesn't split.
     stdin.write(DOWN);
