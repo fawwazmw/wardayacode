@@ -10,8 +10,10 @@ const LEFT = '\x1b[D';
 const DOWN = '\x1b[B';
 
 const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0));
-/** Slower tick for CI environments where rendering may be deferred. */
-const slowTick = () => new Promise<void>(resolve => setTimeout(resolve, 15));
+/** Wait for Ink's useInput to register before sending keys in CI. */
+const settle = () => new Promise<void>(resolve => setTimeout(resolve, 50));
+/** Tick between keystrokes for React to flush state updates. */
+const tickMs = () => new Promise<void>(resolve => setTimeout(resolve, 20));
 
 describe('HelpDialog', () => {
   it('opens on the General section showing the shortcuts list', () => {
@@ -28,13 +30,16 @@ describe('HelpDialog', () => {
     expect(out).toContain('ctrl + shift + -');
   });
 
-  it('Tab advances to the Commands section showing the first page of commands', async () => {
+  it('Right arrow advances to the Commands section showing the first page of commands', async () => {
     const { stdin, lastFrame } = render(
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
-    await tick();
-    stdin.write(TAB);
-    await slowTick();
+    // Settle: give Ink's useInput enough time to register before sending any
+    // keys. If we write too soon the \x1b prefix of RIGHT/DOWN/ESC gets
+    // interpreted as a standalone escape and the dialog closes.
+    await settle();
+    stdin.write(RIGHT);
+    await tickMs();
     const out = lastFrame() ?? '';
     // First command in the catalog is visible; a later one is scrolled off.
     expect(out).toContain('/add-dir');
@@ -48,9 +53,9 @@ describe('HelpDialog', () => {
     const { stdin, lastFrame } = render(
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
-    await tick();
-    stdin.write(TAB);
-    await slowTick();
+    await settle();
+    stdin.write(RIGHT);
+    await tickMs();
     const out = lastFrame() ?? '';
     // /add-dir isn't in the live registry, so it carries the "(soon)" marker,
     // and the legend explains it.
@@ -62,12 +67,11 @@ describe('HelpDialog', () => {
     const { stdin, lastFrame } = render(
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
-    await tick();
-    stdin.write(TAB);
-    await slowTick();
-    // Write down-arrow as a single chunk so \x1b doesn't split.
+    await settle();
+    stdin.write(RIGHT);
+    await tickMs();
     stdin.write(DOWN);
-    await slowTick();
+    await tickMs();
     const out = lastFrame() ?? '';
     // Scrolled one row: the first command is gone, the window shifts down.
     expect(out).not.toContain('/add-dir');
@@ -78,13 +82,11 @@ describe('HelpDialog', () => {
     const { stdin, lastFrame } = render(
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
-    await tick();
-    // Write each arrow separately with a render tick between so React processes
-    // each state update before the next key arrives.
+    await settle();
     stdin.write(RIGHT);
-    await slowTick();
+    await tickMs();
     stdin.write(RIGHT);
-    await slowTick();
+    await tickMs();
     const out = lastFrame() ?? '';
     expect(out).toContain('No custom commands yet.');
   });
@@ -93,11 +95,9 @@ describe('HelpDialog', () => {
     const { stdin, lastFrame } = render(
       <HelpDialog themeMode="dark" onClose={vi.fn()} />,
     );
-    await tick();
+    await settle();
     stdin.write(LEFT);
-    // Extra tick so Ink can process the escape-prefixed sequence fully even when
-    // rendering is deferred (CI environments).
-    await slowTick();
+    await tickMs();
     const out = lastFrame() ?? '';
     expect(out).toContain('No custom commands yet.');
   });
@@ -107,9 +107,9 @@ describe('HelpDialog', () => {
     const { stdin } = render(
       <HelpDialog themeMode="dark" onClose={onClose} />,
     );
-    await tick();
+    await settle();
     stdin.write(ESC);
-    await slowTick();
+    await tickMs();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
