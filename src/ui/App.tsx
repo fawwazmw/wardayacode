@@ -74,6 +74,8 @@ export function App({
   const [effortLevel, setEffortLevel] = useState('medium');
   const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
+  const [tasks, setTasks] = useState<{ id: number; desc: string; status: string }[]>([]);
+  const taskIdCounter = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
   // Full output of the most-recent tool call, toggled by ctrl+o. It renders in
@@ -330,12 +332,20 @@ export function App({
       createBranch: async (name: string) => {
         const { execSync } = await import('node:child_process');
         try {
-          execSync(`git stash`, { stdio: 'pipe' });
+          // Check it's a git repo first
+          execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
+        } catch {
+          return `Not a git repository. Cannot create branch.`;
+        }
+        try {
+          // Stash any uncommitted changes first
+          execSync('git stash --include-untracked', { stdio: 'pipe' });
           execSync(`git checkout -b ${name}`, { stdio: 'pipe' });
-          execSync(`git stash pop`, { stdio: 'pipe' });
+          // Pop the stash, but don't fail if it was empty
+          try { execSync('git stash pop', { stdio: 'pipe' }); } catch { /* no stash to pop */ }
           return `Branch created: ${name}. Switched to new branch.`;
         } catch {
-          return `Failed to create branch: ${name}`;
+          return `Failed to create branch: ${name}.`;
         }
       },
       listPlugins: () => {
@@ -427,6 +437,35 @@ export function App({
         ctx.clear();
         for (const m of compacted.messages) ctx.addMessage(m);
         return `Context compacted: ${compacted.compactionLayers.length} layer(s) applied, ~${compacted.tokenCount.toLocaleString()} tokens remaining.`;
+      },
+      openUrl: async (url: string) => {
+        const { execSync } = await import('node:child_process');
+        try {
+          execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+          return `Opened in browser: ${url}`;
+        } catch {
+          return `Open this URL in your browser:\n  ${url}`;
+        }
+      },
+      getProjectRoot: () => process.cwd(),
+      addTask: (desc: string) => {
+        taskIdCounter.current += 1;
+        const id = taskIdCounter.current;
+        setTasks(prev => [...prev, { id, desc, status: 'running' }]);
+        return id;
+      },
+      listTasks: () => tasks,
+      clearTasks: (id?: number) => {
+        if (id === undefined) {
+          setTasks([]);
+          return 'All tasks cleared.';
+        }
+        let found = false;
+        setTasks(prev => prev.filter(t => {
+          if (t.id === id) found = true;
+          return t.id !== id;
+        }));
+        return found ? `Task ${id} cleared.` : `No task with id ${id}.`;
       },
     });
 
