@@ -10,6 +10,8 @@ const LEFT = '\x1b[D';
 const DOWN = '\x1b[B';
 
 const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+/** Slower tick for CI environments where rendering may be deferred. */
+const slowTick = () => new Promise<void>(resolve => setTimeout(resolve, 15));
 
 describe('HelpDialog', () => {
   it('opens on the General section showing the shortcuts list', () => {
@@ -32,8 +34,7 @@ describe('HelpDialog', () => {
     );
     await tick();
     stdin.write(TAB);
-    await tick();
-    await tick();
+    await slowTick();
     const out = lastFrame() ?? '';
     // First command in the catalog is visible; a later one is scrolled off.
     expect(out).toContain('/add-dir');
@@ -49,8 +50,7 @@ describe('HelpDialog', () => {
     );
     await tick();
     stdin.write(TAB);
-    await tick();
-    await tick();
+    await slowTick();
     const out = lastFrame() ?? '';
     // /add-dir isn't in the live registry, so it carries the "(soon)" marker,
     // and the legend explains it.
@@ -64,12 +64,10 @@ describe('HelpDialog', () => {
     );
     await tick();
     stdin.write(TAB);
-    await tick();
-    await tick();
+    await slowTick();
     // Write down-arrow as a single chunk so \x1b doesn't split.
     stdin.write(DOWN);
-    await tick();
-    await tick();
+    await slowTick();
     const out = lastFrame() ?? '';
     // Scrolled one row: the first command is gone, the window shifts down.
     expect(out).not.toContain('/add-dir');
@@ -84,11 +82,9 @@ describe('HelpDialog', () => {
     // Write each arrow separately with a render tick between so React processes
     // each state update before the next key arrives.
     stdin.write(RIGHT);
-    await tick();
-    await tick();
+    await slowTick();
     stdin.write(RIGHT);
-    await tick();
-    await tick();
+    await slowTick();
     const out = lastFrame() ?? '';
     expect(out).toContain('No custom commands yet.');
   });
@@ -101,8 +97,7 @@ describe('HelpDialog', () => {
     stdin.write(LEFT);
     // Extra tick so Ink can process the escape-prefixed sequence fully even when
     // rendering is deferred (CI environments).
-    await tick();
-    await tick();
+    await slowTick();
     const out = lastFrame() ?? '';
     expect(out).toContain('No custom commands yet.');
   });
@@ -114,8 +109,7 @@ describe('HelpDialog', () => {
     );
     await tick();
     stdin.write(ESC);
-    await tick();
-    await tick();
+    await slowTick();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
