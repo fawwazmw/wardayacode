@@ -9,6 +9,10 @@
 [![Tests](https://img.shields.io/badge/tests-398-brightgreen)](https://github.com/fawwazmw/wardayacode)
 [![Coverage](https://img.shields.io/badge/coverage-73%25-yellowgreen)](https://github.com/fawwazmw/wardayacode)
 
+<p align="center">
+  <img src="docs/wardayacode-demo.svg" alt="WardayaCode terminal UI" width="720">
+</p>
+
 ---
 
 ## Install
