@@ -10,7 +10,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-73%25-yellowgreen)](https://github.com/fawwazmw/wardayacode)
 
 <p align="center">
-  <img src="docs/wardayacode-demo.svg" alt="WardayaCode terminal UI" width="720">
+  <img src="docs/wardayacode-demo.png" alt="WardayaCode terminal UI" width="720">
 </p>
 
 ---
@@ -91,12 +91,12 @@ wardayacode --max-retries 5
 
 ## Permission Modes
 
-| Mode | File reads | File writes | Bash / Git | Use case |
-|------|-----------|------------|-----------|----------|
-| `default` | ✅ auto | ❓ prompt | ❓ prompt | Daily use |
-| `plan` | ✅ auto | ❌ blocked | ❌ blocked | Review-only |
-| `acceptEdits` | ✅ auto | ✅ auto | ❓ prompt | Trusted edits |
-| `auto` | ✅ auto | ✅ auto | ✅ auto | Scripting |
+| Mode          | File reads | File writes | Bash / Git | Use case      |
+| ------------- | ---------- | ----------- | ---------- | ------------- |
+| `default`     | ✅ auto    | ❓ prompt   | ❓ prompt  | Daily use     |
+| `plan`        | ✅ auto    | ❌ blocked  | ❌ blocked | Review-only   |
+| `acceptEdits` | ✅ auto    | ✅ auto     | ❓ prompt  | Trusted edits |
+| `auto`        | ✅ auto    | ✅ auto     | ✅ auto    | Scripting     |
 
 Switch mid-session with `/permissions` or choose "Always allow" when prompted.
 
@@ -106,36 +106,36 @@ Switch mid-session with `/permissions` or choose "Always allow" when prompted.
 
 Type `/` in the TUI to open the command palette, or browse the full catalog with `/help`.
 
-| Command | Description |
-|--------|-------------|
-| `/status` | Version, model, mode, session info |
-| `/cost` | Session cost & duration estimate |
-| `/context` | Context usage visualization |
-| `/theme` | Switch dark / light mode |
-| `/export` | Export conversation to markdown |
-| `/rename` | Name the current session |
-| `/resume` | Resume a previous session |
-| `/init` | Create WARDAYA.md for your project |
-| `/plan` | Enter plan mode (read-only) |
-| `/fast` | Toggle fast mode |
-| `/stats` | Usage statistics |
-| `/model` | Switch AI model |
-| `/effort` | Set effort level (low/medium/high) |
-| `/branch` | Create a git branch |
-| `/diff` | View uncommitted changes |
-| `/undo` | Revert last file edit |
-| `/checkpoint` | Create a git stash checkpoint |
-| `/rollback` | Restore last checkpoint |
-| `/review` | Pull request review guide |
-| `/copy` | Copy last response to clipboard |
-| `/insights` | Session analytics |
-| `/doctor` | Installation diagnostics |
-| `/feedback` | Submit feedback |
-| `/config` | Show configuration |
-| `/clear` | Reset conversation |
-| `/compact` | Manually compact context |
-| `/help` | Full command catalog |
-| `/exit` | Exit |
+| Command       | Description                        |
+| ------------- | ---------------------------------- |
+| `/status`     | Version, model, mode, session info |
+| `/cost`       | Session cost & duration estimate   |
+| `/context`    | Context usage visualization        |
+| `/theme`      | Switch dark / light mode           |
+| `/export`     | Export conversation to markdown    |
+| `/rename`     | Name the current session           |
+| `/resume`     | Resume a previous session          |
+| `/init`       | Create WARDAYA.md for your project |
+| `/plan`       | Enter plan mode (read-only)        |
+| `/fast`       | Toggle fast mode                   |
+| `/stats`      | Usage statistics                   |
+| `/model`      | Switch AI model                    |
+| `/effort`     | Set effort level (low/medium/high) |
+| `/branch`     | Create a git branch                |
+| `/diff`       | View uncommitted changes           |
+| `/undo`       | Revert last file edit              |
+| `/checkpoint` | Create a git stash checkpoint      |
+| `/rollback`   | Restore last checkpoint            |
+| `/review`     | Pull request review guide          |
+| `/copy`       | Copy last response to clipboard    |
+| `/insights`   | Session analytics                  |
+| `/doctor`     | Installation diagnostics           |
+| `/feedback`   | Submit feedback                    |
+| `/config`     | Show configuration                 |
+| `/clear`      | Reset conversation                 |
+| `/compact`    | Manually compact context           |
+| `/help`       | Full command catalog               |
+| `/exit`       | Exit                               |
 
 Run `/help` inside WardayaCode for the complete list with descriptions.
 
@@ -145,16 +145,16 @@ Run `/help` inside WardayaCode for the complete list with descriptions.
 
 The agent uses these tools to interact with your codebase:
 
-| Tool | What it does |
-|------|-------------|
-| `read_file` | Read a file with optional line range |
-| `write_file` | Create or overwrite a file |
-| `edit_file` | Surgical string-replacement edits |
-| `bash` | Run shell commands |
-| `git` | Run git commands (status, log, diff, add, commit) |
-| `glob` | Find files by pattern |
-| `grep` | Search file contents with regex |
-| `list_files` | List a directory |
+| Tool         | What it does                                      |
+| ------------ | ------------------------------------------------- |
+| `read_file`  | Read a file with optional line range              |
+| `write_file` | Create or overwrite a file                        |
+| `edit_file`  | Surgical string-replacement edits                 |
+| `bash`       | Run shell commands                                |
+| `git`        | Run git commands (status, log, diff, add, commit) |
+| `glob`       | Find files by pattern                             |
+| `grep`       | Search file contents with regex                   |
+| `list_files` | List a directory                                  |
 
 Dangerous operations (force push, `rm -rf`, `dd`, etc.) are permanently blocked.
 
@@ -250,21 +250,21 @@ src/
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `!` | Bash mode |
-| `/` | Commands palette |
-| `Tab` | Auto-complete command |
-| `Esc` | Clear input / interrupt agent |
-| `Ctrl+O` | Toggle verbose output |
-| `Ctrl+T` | Toggle task list |
-| `Ctrl+Z` | Suspend |
-| `Ctrl+V` | Paste images |
-| `Alt+P` | Switch model |
-| `Alt+O` | Toggle fast mode |
-| `Ctrl+S` | Stash prompt |
-| `Ctrl+G` | Edit in `$EDITOR` |
-| `\` + `Enter` | Multi-line input |
+| Key           | Action                        |
+| ------------- | ----------------------------- |
+| `!`           | Bash mode                     |
+| `/`           | Commands palette              |
+| `Tab`         | Auto-complete command         |
+| `Esc`         | Clear input / interrupt agent |
+| `Ctrl+O`      | Toggle verbose output         |
+| `Ctrl+T`      | Toggle task list              |
+| `Ctrl+Z`      | Suspend                       |
+| `Ctrl+V`      | Paste images                  |
+| `Alt+P`       | Switch model                  |
+| `Alt+O`       | Toggle fast mode              |
+| `Ctrl+S`      | Stash prompt                  |
+| `Ctrl+G`      | Edit in `$EDITOR`             |
+| `\` + `Enter` | Multi-line input              |
 
 ---
 
