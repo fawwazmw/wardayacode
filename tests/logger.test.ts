@@ -120,5 +120,10 @@ describe('logger', () => {
     expect(logger.getLogDir()).toContain('.wardayacode');
   });
 
+  it('close() can be called without error', () => {
+    // close() should be safe to call even when no stream is open
+    expect(() => logger.close()).not.toThrow();
+  });
+
   void originalStderr; // keep reference to avoid GC issues
 });
