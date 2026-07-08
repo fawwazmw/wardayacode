@@ -138,6 +138,10 @@ export interface SlashCommandContext {
   setSandboxEnabled: (enabled: boolean) => void;
   /** Get sandbox enabled state. */
   getSandboxEnabled: () => boolean;
+  /** Submit a side question without affecting the main conversation. */
+  askSideQuestion: (question: string) => Promise<string>;
+  /** List open PRs via gh CLI. */
+  listOpenPRs: () => Promise<string>;
 }
 
 export interface SlashCommandResult {
@@ -334,8 +338,23 @@ export async function handleSlashCommand(
       return { handled: true, output: `Color set to: ${arg}` };
     }
 
-    case '/skills':
-      return { handled: true, output: 'Available skills: planning, research, code review, debugging, testing, documentation' };
+    case '/skills': {
+      const { existsSync, readdirSync } = await import('fs');
+      const { join } = await import('path');
+      const root = ctx.getProjectRoot();
+      const skillsDir = join(root, '.wardayacode', 'skills');
+      const skills: string[] = [];
+      if (existsSync(skillsDir)) {
+        const files = readdirSync(skillsDir).filter(f => f.endsWith('.md') || f.endsWith('.js'));
+        for (const f of files) {
+          skills.push(f.replace(/\.(md|js)$/, ''));
+        }
+      }
+      if (skills.length === 0) {
+        return { handled: true, output: 'Available skills: planning, research, code review, debugging, testing, documentation\nAdd custom skills to .wardayacode/skills/.' };
+      }
+      return { handled: true, output: `Custom skills:\n  ${skills.join('\n  ')}\n\nBuilt-in skills: planning, research, code review, debugging, testing, documentation` };
+    }
 
     case '/release-notes': {
       const v = ctx.getVersion();
@@ -378,11 +397,35 @@ export async function handleSlashCommand(
     case '/hooks':
       return { handled: true, output: 'Hooks are shell commands that run on tool events.\nConfigure them in .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.' };
 
-    case '/memory':
-      return { handled: true, output: 'Wardaya memory files are stored in ~/.claude/memory/\nUse /memory <topic> to edit or view memory entries.' };
+    case '/memory': {
+      const { existsSync, readdirSync, readFileSync } = await import('fs');
+      const { join } = await import('path');
+      const { homedir } = await import('os');
+      const memDir = join(homedir(), '.claude', 'memory');
+      if (!existsSync(memDir)) {
+        return { handled: true, output: 'No memory files found.\nMemory files are stored in ~/.claude/memory/.\nUse /memory <topic> to view or create a memory entry.' };
+      }
+      const files = readdirSync(memDir).filter(f => f.endsWith('.md'));
+      if (files.length === 0) {
+        return { handled: true, output: 'No memory files found.\nMemory files are stored in ~/.claude/memory/.\nUse /memory <topic> to view or create a memory entry.' };
+      }
+      if (arg) {
+        const topicFile = files.find(f => f.toLowerCase().includes(arg.toLowerCase()));
+        if (!topicFile) {
+          return { handled: true, output: `No memory found matching "${arg}".\nAvailable topics:\n  ${files.map(f => f.replace('.md', '')).join('\n  ')}` };
+        }
+        const content = readFileSync(join(memDir, topicFile), 'utf-8');
+        return { handled: true, output: `${topicFile.replace('.md', '')}:\n${content.trim()}` };
+      }
+      return { handled: true, output: `Memory files:\n  ${files.map(f => f.replace('.md', '')).join('\n  ')}\n\nUse /memory <topic> to view a memory entry.` };
+    }
 
-    case '/anw':
-      return { handled: true, output: 'Side question mode:\nType your question after /anw and the response won\'t affect the conversation history.' };
+    case '/anw': {
+      if (!arg) {
+        return { handled: true, output: 'Usage: /anw <question>\nAsk a quick side question without interrupting the main conversation.' };
+      }
+      return { handled: true, output: await ctx.askSideQuestion(parts.slice(1).join(' ').trim()) };
+    }
 
     case '/effort': {
       if (!arg) {
@@ -477,7 +520,7 @@ export async function handleSlashCommand(
       return { handled: true, output: await ctx.reloadPlugins() };
 
     case '/review':
-      return { handled: true, output: 'Pull request review:\nUse `gh pr review` in the terminal or run WardayaCode in review mode with `wardayacode review`.\nUncommitted changes can be viewed with /diff.' };
+      return { handled: true, output: await ctx.listOpenPRs() };
 
     case '/sandbox': {
       const enabled = ctx.getSandboxEnabled();
