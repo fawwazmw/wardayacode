@@ -339,7 +339,7 @@ describe('handleSlashCommand', () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/stickers', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('stickers');
+    expect(result.output).toContain('github.com');
   });
 
   it('handles /permissions', async () => {
