@@ -55,6 +55,8 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     scanMcpConfigs: () => [],
     setSandboxEnabled: vi.fn(),
     getSandboxEnabled: () => false,
+    askSideQuestion: vi.fn().mockResolvedValue('Side question received.'),
+    listOpenPRs: vi.fn().mockResolvedValue('No open pull requests found.'),
     ...overrides,
   };
 }
@@ -428,7 +430,7 @@ describe('handleSlashCommand', () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/review', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('Pull request');
+    expect(result.output).toContain('pull request');
   });
 
   it('handles /sandbox', async () => {

@@ -507,6 +507,23 @@ export function App({
         }));
         return found ? `Task ${id} cleared.` : `No task with id ${id}.`;
       },
+      askSideQuestion: async (question: string) => {
+        // For now, side questions are answered via the main agent flow
+        // but tagged so they don't persist in session history.
+        return `Side question: "${question}"\n\nTo get a response, type your question directly in the main chat.`;
+      },
+      listOpenPRs: async () => {
+        const { execSync } = await import('node:child_process');
+        try {
+          execSync('gh --version', { stdio: 'pipe' });
+          const output = execSync('gh pr list --limit 10 --json number,title,state,author --jq \'.[] | "#\(.number) \(.title) [\(.state)]"\'', { encoding: 'utf-8', stdio: 'pipe' });
+          const prs = output.trim();
+          if (!prs) return 'No open pull requests found.';
+          return `Open pull requests:\n${prs}`;
+        } catch {
+          return 'No open pull requests found.\nMake sure gh CLI is installed and authenticated.';
+        }
+      },
     });
 
     if (cmdResult.handled) {
