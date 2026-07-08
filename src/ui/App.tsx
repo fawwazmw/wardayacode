@@ -76,8 +76,24 @@ export function App({
   const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const [sandboxEnabled, setSandboxEnabled] = useState(false);
+  const sandboxRef = useRef(sandboxEnabled);
+  sandboxRef.current = sandboxEnabled;
   const [tasks, setTasks] = useState<{ id: number; desc: string; status: string }[]>([]);
   const taskIdCounter = useRef(0);
+  const sessionNameRef = useRef(sessionName);
+  sessionNameRef.current = sessionName;
+  const fastModeRef = useRef(fastMode);
+  fastModeRef.current = fastMode;
+  const colorValueRef = useRef(colorValue);
+  colorValueRef.current = colorValue;
+  const effortLevelRef = useRef(effortLevel);
+  effortLevelRef.current = effortLevel;
+  const directoriesRef = useRef(directories);
+  directoriesRef.current = directories;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  const sandboxEnabledRef = useRef(sandboxEnabled);
+  sandboxEnabledRef.current = sandboxEnabled;
   const abortRef = useRef<AbortController | null>(null);
 
   // Full output of the most-recent tool call, toggled by ctrl+o. It renders in
@@ -238,7 +254,7 @@ export function App({
       },
       setThemeMode: (mode) => setThemeMode(mode),
       getSessionId: () => session.getId(),
-      getSessionName: () => sessionName,
+      getSessionName: () => sessionNameRef.current,
       setSessionName: (name) => setSessionName(name),
       getModel: () => model,
       getVersion: () => version,
@@ -314,11 +330,11 @@ export function App({
         await fs.writeFile(filepath, content, 'utf-8');
         return `WARDAYA.md created in ${cwd}`;
       },
-      getFastMode: () => fastMode,
+      getFastMode: () => fastModeRef.current,
       setFastMode: (fast) => setFastMode(fast),
-      getColor: () => colorValue,
+      getColor: () => colorValueRef.current,
       setColor: (color) => setColorValue(color),
-      getEffort: () => effortLevel,
+      getEffort: () => effortLevelRef.current,
       setEffort: (level) => setEffortLevel(level),
       setTuiRenderer: (renderer: string) => `TUI renderer set to: ${renderer}`,
       getAgentConfigSummary: () => {
@@ -380,7 +396,7 @@ export function App({
       getSandboxStatus: () => {
         return `Sandbox: ${sandboxEnabled ? 'enabled' : 'disabled'}\nSandbox isolates file access to the project directory.\nEnable with /sandbox enable.`;
       },
-      getSandboxEnabled: () => sandboxEnabled,
+      getSandboxEnabled: () => sandboxRef.current,
       setSandboxEnabled: (enabled: boolean) => setSandboxEnabled(enabled),
       runSecurityReview: async () => {
         const d = await checkpoint.getDiff();
@@ -402,7 +418,7 @@ export function App({
         output.push(`\nFull diff: ${lines.length} lines`);
         return output.join('\n');
       },
-      getDirectories: () => directories,
+      getDirectories: () => directoriesRef.current,
       addDirectory: (dir: string) => {
         setDirectories(prev => prev.includes(dir) ? prev : [...prev, dir]);
         return `Added directory: ${dir}`;
@@ -478,7 +494,7 @@ export function App({
         setTasks(prev => [...prev, { id, desc, status: 'running' }]);
         return id;
       },
-      listTasks: () => tasks,
+      listTasks: () => tasksRef.current,
       clearTasks: (id?: number) => {
         if (id === undefined) {
           setTasks([]);
