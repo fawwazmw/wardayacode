@@ -29,4 +29,26 @@ describe('providerAuth', () => {
 
     expect(key).toBe('generic-key');
   });
+
+  it('falls back to process.env when no config keys are set', () => {
+    process.env['ANTHROPIC_API_KEY'] = 'env-key';
+    const key = resolveProviderApiKey({
+      provider: 'anthropic',
+    });
+
+    expect(key).toBe('env-key');
+    delete process.env['ANTHROPIC_API_KEY'];
+  });
+
+  it('returns undefined when no key is available anywhere', () => {
+    delete process.env['ANTHROPIC_API_KEY'];
+    delete process.env['OPENAI_API_KEY'];
+    delete process.env['GOOGLE_GENERATIVE_AI_API_KEY'];
+
+    const key = resolveProviderApiKey({
+      provider: 'anthropic',
+    });
+
+    expect(key).toBeUndefined();
+  });
 });
