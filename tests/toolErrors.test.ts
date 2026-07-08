@@ -149,3 +149,129 @@ describe('WriteFileTool', () => {
     expect(result.error).toContain('Path escape');
   });
 });
+
+// ─── GlobTool ──────────────────────────────────────────────────────────────
+
+describe('GlobTool', () => {
+  it('reports missing pattern', async () => {
+    const { GlobTool } = await import('../src/tools/GlobTool.js');
+    const tool = new GlobTool(testDir);
+    const result = await tool.execute({});
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/missing|required/i);
+  });
+
+  it('reports path escape', async () => {
+    const { GlobTool } = await import('../src/tools/GlobTool.js');
+    const tool = new GlobTool(testDir);
+    const result = await tool.execute({ pattern: '*', path: '/etc' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Path escape');
+  });
+
+  it('returns no matches for non-existent pattern', async () => {
+    const { GlobTool } = await import('../src/tools/GlobTool.js');
+    const tool = new GlobTool(testDir);
+    const result = await tool.execute({ pattern: 'nonexistent-*.xyz', path: testDir });
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('No files matched');
+  });
+
+  it('finds matching files', async () => {
+    writeFileSync(join(testDir, 'test.ts'), '');
+    writeFileSync(join(testDir, 'other.js'), '');
+    const { GlobTool } = await import('../src/tools/GlobTool.js');
+    const tool = new GlobTool(testDir);
+    const result = await tool.execute({ pattern: '*.ts', path: testDir });
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('test.ts');
+  });
+});
+
+// ─── ReadFileTool ──────────────────────────────────────────────────────────
+
+describe('ReadFileTool', () => {
+  it('reports missing filePath', async () => {
+    const { ReadFileTool } = await import('../src/tools/ReadFileTool.js');
+    const tool = new ReadFileTool(testDir);
+    const result = await tool.execute({});
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/missing|required/i);
+  });
+
+  it('reports path escape', async () => {
+    const { ReadFileTool } = await import('../src/tools/ReadFileTool.js');
+    const tool = new ReadFileTool(testDir);
+    const result = await tool.execute({ filePath: '/etc/passwd' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Path escape');
+  });
+
+  it('reports file not found', async () => {
+    const { ReadFileTool } = await import('../src/tools/ReadFileTool.js');
+    const tool = new ReadFileTool(testDir);
+    const result = await tool.execute({ filePath: join(testDir, 'does-not-exist.txt') });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found|ENOENT/i);
+  });
+
+  it('reads a file successfully', async () => {
+    writeFileSync(join(testDir, 'read-me.txt'), 'line1\nline2\nline3\n');
+    const { ReadFileTool } = await import('../src/tools/ReadFileTool.js');
+    const tool = new ReadFileTool(testDir);
+    const result = await tool.execute({ filePath: join(testDir, 'read-me.txt') });
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('1: line1');
+    expect(result.content).toContain('2: line2');
+  });
+});
+
+// ─── EditFileTool ──────────────────────────────────────────────────────────
+
+describe('EditFileTool', () => {
+  it('reports missing fields', async () => {
+    const { EditFileTool } = await import('../src/tools/EditFileTool.js');
+    const tool = new EditFileTool(testDir);
+    const result = await tool.execute({});
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/missing|required/i);
+  });
+
+  it('reports oldString not found', async () => {
+    writeFileSync(join(testDir, 'edit-me.txt'), 'hello world');
+    const { EditFileTool } = await import('../src/tools/EditFileTool.js');
+    const tool = new EditFileTool(testDir);
+    const result = await tool.execute({
+      filePath: join(testDir, 'edit-me.txt'),
+      oldString: 'zzzz',
+      newString: 'yyyy',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+  });
+
+  it('reports file not found', async () => {
+    const { EditFileTool } = await import('../src/tools/EditFileTool.js');
+    const tool = new EditFileTool(testDir);
+    const result = await tool.execute({
+      filePath: join(testDir, 'nonexistent.txt'),
+      oldString: 'foo',
+      newString: 'bar',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found|ENOENT/i);
+  });
+
+  it('edits a file successfully', async () => {
+    writeFileSync(join(testDir, 'edit-me.txt'), 'hello world foo bar');
+    const { EditFileTool } = await import('../src/tools/EditFileTool.js');
+    const tool = new EditFileTool(testDir);
+    const result = await tool.execute({
+      filePath: join(testDir, 'edit-me.txt'),
+      oldString: 'world',
+      newString: 'there',
+    });
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('Edited');
+  });
+});
