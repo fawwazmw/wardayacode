@@ -46,6 +46,17 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     rollback: vi.fn().mockResolvedValue('Rolled back to last checkpoint.'),
     diff: vi.fn().mockResolvedValue(' src/foo.ts | 2 +-'),
     compact: vi.fn().mockResolvedValue('Context compacted: 2 layer(s) applied, ~1,234 tokens remaining.'),
+    openUrl: vi.fn().mockResolvedValue('Opened in browser: https://github.com/fawwazmw/wardayacode/issues/new/choose'),
+    getProjectRoot: () => '/test',
+    addTask: vi.fn().mockReturnValue(1),
+    listTasks: () => [],
+    clearTasks: vi.fn().mockReturnValue('All tasks cleared.'),
+    scanPlugins: () => [],
+    scanMcpConfigs: () => [],
+    setSandboxEnabled: vi.fn(),
+    getSandboxEnabled: () => false,
+    askSideQuestion: vi.fn().mockResolvedValue('Side question received.'),
+    listOpenPRs: vi.fn().mockResolvedValue('No open pull requests found.'),
     ...overrides,
   };
 }
@@ -328,7 +339,7 @@ describe('handleSlashCommand', () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/stickers', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('stickers');
+    expect(result.output).toContain('github.com');
   });
 
   it('handles /permissions', async () => {
@@ -419,7 +430,7 @@ describe('handleSlashCommand', () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/review', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('Pull request');
+    expect(result.output).toContain('pull request');
   });
 
   it('handles /sandbox', async () => {

@@ -21,12 +21,22 @@ describe('InputBar newline handling', () => {
     const { stdin } = render(
       <InputBar onSubmit={onSubmit} isLoading={false} themeMode="dark" />,
     );
-    await tick(); // let Ink attach its stdin data listener
+    // Extra tick to let Ink register the useInput handler in CI.
+    await tick();
+    await tick();
 
-    stdin.write('line one'); await tick();
-    stdin.write(CTRL_J); await tick();
-    stdin.write('line two'); await tick();
-    stdin.write(ENTER); await tick();
+    stdin.write('line one');
+    await tick();
+    await tick();
+    stdin.write(CTRL_J);
+    await tick();
+    await tick();
+    stdin.write('line two');
+    await tick();
+    await tick();
+    stdin.write(ENTER);
+    await tick();
+    await tick();
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith('line one\nline two');
@@ -37,10 +47,17 @@ describe('InputBar newline handling', () => {
     const { stdin } = render(
       <InputBar onSubmit={onSubmit} isLoading={false} themeMode="dark" />,
     );
-    await tick(); // let Ink attach its stdin data listener
+    // Extra tick to let Ink's useInput handler register in CI where rendering
+    // may be deferred.
+    await tick();
+    await tick();
 
-    stdin.write('just one line'); await tick();
-    stdin.write(ENTER); await tick();
+    stdin.write('just one line');
+    await tick();
+    await tick();
+    stdin.write(ENTER);
+    await tick();
+    await tick();
 
     expect(onSubmit).toHaveBeenCalledWith('just one line');
   });
@@ -58,9 +75,14 @@ describe('InputBar interrupt', () => {
         onInterrupt={onInterrupt}
       />,
     );
+    // Multiple ticks to let Ink fully register the useInput handler chain in
+    // CI environments where rendering may be deferred.
+    await tick();
     await tick();
 
-    stdin.write(ESC); await tick();
+    stdin.write(ESC);
+    await tick();
+    await tick();
 
     expect(onInterrupt).toHaveBeenCalledTimes(1);
     expect(onSubmit).not.toHaveBeenCalled();

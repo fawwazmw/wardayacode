@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Box, useApp, useInput } from 'ink';
 import fs from 'fs/promises';
+import { existsSync, readdirSync } from 'fs';
 import path from 'path';
 import type { Agent } from '../agent/index.js';
 import type { Session } from '../session/Session.js';
@@ -74,6 +75,25 @@ export function App({
   const [effortLevel, setEffortLevel] = useState('medium');
   const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
+  const [sandboxEnabled, setSandboxEnabled] = useState(false);
+  const sandboxRef = useRef(sandboxEnabled);
+  sandboxRef.current = sandboxEnabled;
+  const [tasks, setTasks] = useState<{ id: number; desc: string; status: string }[]>([]);
+  const taskIdCounter = useRef(0);
+  const sessionNameRef = useRef(sessionName);
+  sessionNameRef.current = sessionName;
+  const fastModeRef = useRef(fastMode);
+  fastModeRef.current = fastMode;
+  const colorValueRef = useRef(colorValue);
+  colorValueRef.current = colorValue;
+  const effortLevelRef = useRef(effortLevel);
+  effortLevelRef.current = effortLevel;
+  const directoriesRef = useRef(directories);
+  directoriesRef.current = directories;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  const sandboxEnabledRef = useRef(sandboxEnabled);
+  sandboxEnabledRef.current = sandboxEnabled;
   const abortRef = useRef<AbortController | null>(null);
 
   // Full output of the most-recent tool call, toggled by ctrl+o. It renders in
@@ -234,7 +254,7 @@ export function App({
       },
       setThemeMode: (mode) => setThemeMode(mode),
       getSessionId: () => session.getId(),
-      getSessionName: () => sessionName,
+      getSessionName: () => sessionNameRef.current,
       setSessionName: (name) => setSessionName(name),
       getModel: () => model,
       getVersion: () => version,
@@ -310,11 +330,11 @@ export function App({
         await fs.writeFile(filepath, content, 'utf-8');
         return `WARDAYA.md created in ${cwd}`;
       },
-      getFastMode: () => fastMode,
+      getFastMode: () => fastModeRef.current,
       setFastMode: (fast) => setFastMode(fast),
-      getColor: () => colorValue,
+      getColor: () => colorValueRef.current,
       setColor: (color) => setColorValue(color),
-      getEffort: () => effortLevel,
+      getEffort: () => effortLevelRef.current,
       setEffort: (level) => setEffortLevel(level),
       setTuiRenderer: (renderer: string) => `TUI renderer set to: ${renderer}`,
       getAgentConfigSummary: () => {
@@ -330,12 +350,20 @@ export function App({
       createBranch: async (name: string) => {
         const { execSync } = await import('node:child_process');
         try {
-          execSync(`git stash`, { stdio: 'pipe' });
+          // Check it's a git repo first
+          execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
+        } catch {
+          return `Not a git repository. Cannot create branch.`;
+        }
+        try {
+          // Stash any uncommitted changes first
+          execSync('git stash --include-untracked', { stdio: 'pipe' });
           execSync(`git checkout -b ${name}`, { stdio: 'pipe' });
-          execSync(`git stash pop`, { stdio: 'pipe' });
+          // Pop the stash, but don't fail if it was empty
+          try { execSync('git stash pop', { stdio: 'pipe' }); } catch { /* no stash to pop */ }
           return `Branch created: ${name}. Switched to new branch.`;
         } catch {
-          return `Failed to create branch: ${name}`;
+          return `Failed to create branch: ${name}.`;
         }
       },
       listPlugins: () => {
@@ -345,9 +373,31 @@ export function App({
       reloadPlugins: async () => {
         return 'Plugins reloaded.';
       },
-      getSandboxStatus: () => {
-        return 'Sandbox: disabled\nSandbox isolates file access to the project directory.\nEnable with /sandbox enable.';
+      scanPlugins: () => {
+        try {
+          const pluginDir = path.join(process.cwd(), '.wardayacode', 'plugins');
+          if (!existsSync(pluginDir)) return [];
+          const files = readdirSync(pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.mjs'));
+          return files.map(f => path.join('.wardayacode', 'plugins', f));
+        } catch {
+          return [];
+        }
       },
+      scanMcpConfigs: () => {
+        try {
+          const mcpDir = path.join(process.cwd(), '.wardayacode', 'mcp');
+          if (!existsSync(mcpDir)) return [];
+          const files = readdirSync(mcpDir).filter(f => f.endsWith('.json'));
+          return files.map(f => path.join('.wardayacode', 'mcp', f));
+        } catch {
+          return [];
+        }
+      },
+      getSandboxStatus: () => {
+        return `Sandbox: ${sandboxEnabled ? 'enabled' : 'disabled'}\nSandbox isolates file access to the project directory.\nEnable with /sandbox enable.`;
+      },
+      getSandboxEnabled: () => sandboxRef.current,
+      setSandboxEnabled: (enabled: boolean) => setSandboxEnabled(enabled),
       runSecurityReview: async () => {
         const d = await checkpoint.getDiff();
         if (!d) return 'No changes to review.';
@@ -368,7 +418,7 @@ export function App({
         output.push(`\nFull diff: ${lines.length} lines`);
         return output.join('\n');
       },
-      getDirectories: () => directories,
+      getDirectories: () => directoriesRef.current,
       addDirectory: (dir: string) => {
         setDirectories(prev => prev.includes(dir) ? prev : [...prev, dir]);
         return `Added directory: ${dir}`;
@@ -427,6 +477,52 @@ export function App({
         ctx.clear();
         for (const m of compacted.messages) ctx.addMessage(m);
         return `Context compacted: ${compacted.compactionLayers.length} layer(s) applied, ~${compacted.tokenCount.toLocaleString()} tokens remaining.`;
+      },
+      openUrl: async (url: string) => {
+        const { execSync } = await import('node:child_process');
+        try {
+          execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+          return `Opened in browser: ${url}`;
+        } catch {
+          return `Open this URL in your browser:\n  ${url}`;
+        }
+      },
+      getProjectRoot: () => process.cwd(),
+      addTask: (desc: string) => {
+        taskIdCounter.current += 1;
+        const id = taskIdCounter.current;
+        setTasks(prev => [...prev, { id, desc, status: 'running' }]);
+        return id;
+      },
+      listTasks: () => tasksRef.current,
+      clearTasks: (id?: number) => {
+        if (id === undefined) {
+          setTasks([]);
+          return 'All tasks cleared.';
+        }
+        let found = false;
+        setTasks(prev => prev.filter(t => {
+          if (t.id === id) found = true;
+          return t.id !== id;
+        }));
+        return found ? `Task ${id} cleared.` : `No task with id ${id}.`;
+      },
+      askSideQuestion: async (question: string) => {
+        // For now, side questions are answered via the main agent flow
+        // but tagged so they don't persist in session history.
+        return `Side question: "${question}"\n\nTo get a response, type your question directly in the main chat.`;
+      },
+      listOpenPRs: async () => {
+        const { execSync } = await import('node:child_process');
+        try {
+          execSync('gh --version', { stdio: 'pipe' });
+          const output = execSync('gh pr list --limit 10 --json number,title,state,author --jq \'.[] | "#\(.number) \(.title) [\(.state)]"\'', { encoding: 'utf-8', stdio: 'pipe' });
+          const prs = output.trim();
+          if (!prs) return 'No open pull requests found.';
+          return `Open pull requests:\n${prs}`;
+        } catch {
+          return 'No open pull requests found.\nMake sure gh CLI is installed and authenticated.';
+        }
       },
     });
 

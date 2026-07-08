@@ -3,6 +3,8 @@ import { Box, Text } from 'ink';
 import { inkColors } from './theme.js';
 import type { SlashCommandEntry } from './SlashCommands.js';
 
+const VISIBLE_COUNT = 10;
+
 interface CommandPaletteProps {
   commands: SlashCommandEntry[];
   selectedIndex: number;
@@ -17,6 +19,19 @@ export function CommandPalette({
   if (commands.length === 0) return null;
 
   const colors = inkColors[themeMode];
+  const total = commands.length;
+
+  // Calculate the visible window so selectedIndex stays centered when possible
+  const half = Math.floor(VISIBLE_COUNT / 2);
+  let start = Math.max(0, selectedIndex - half);
+  const end = Math.min(total, start + VISIBLE_COUNT);
+  // Adjust start if we're near the bottom and the window would be short
+  if (end - start < VISIBLE_COUNT && start > 0) {
+    start = Math.max(0, end - VISIBLE_COUNT);
+  }
+  const visible = commands.slice(start, end);
+  const hasMoreAbove = start > 0;
+  const hasMoreBelow = end < total;
 
   return (
     <Box
@@ -26,8 +41,14 @@ export function CommandPalette({
       paddingX={1}
       marginX={1}
     >
-      {commands.map((cmd, idx) => {
-        const isSelected = idx === selectedIndex;
+      {hasMoreAbove && (
+        <Box gap={1}>
+          <Text color={colors.muted}>  ↑ {start} more</Text>
+        </Box>
+      )}
+      {visible.map((cmd, idx) => {
+        const globalIdx = start + idx;
+        const isSelected = globalIdx === selectedIndex;
         const argStr = cmd.args ? ` ${cmd.args}` : '';
 
         return (
@@ -45,6 +66,11 @@ export function CommandPalette({
           </Box>
         );
       })}
+      {hasMoreBelow && (
+        <Box gap={1}>
+          <Text color={colors.muted}>  ↓ {total - end} more</Text>
+        </Box>
+      )}
     </Box>
   );
 }

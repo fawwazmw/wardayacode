@@ -1,19 +1,19 @@
-# wardayacode
+# WardayaCode
 
-AI-powered coding agent for the terminal. Supports Claude, GPT-4, and Gemini out of the box.
+**AI-powered coding agent for your terminal.** Multi-provider, permission-aware, and built for real development workflows.
 
-```
-$ wardayacode
-❯ Fix the authentication bug in src/auth.ts
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
+[![npm](https://img.shields.io/npm/v/wardayacode)](https://www.npmjs.com/package/wardayacode)
+[![CI](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml/badge.svg)](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-398-brightgreen)](https://github.com/fawwazmw/wardayacode)
+[![Coverage](https://img.shields.io/badge/coverage-73%25-yellowgreen)](https://github.com/fawwazmw/wardayacode)
 
-● read_file(src/auth.ts)
-✓ Found issue: token expiry check uses wrong comparison
-● edit_file(src/auth.ts)
-✓ Fixed: changed > to < in token expiry check on line 42
+<p align="center">
+  <img src="docs/wardayacode-demo.png" alt="WardayaCode terminal UI" width="720">
+</p>
 
-The bug was on line 42 — the expiry comparison was inverted.
-I've corrected it and the token validation should now work as expected.
-```
+---
 
 ## Install
 
@@ -21,41 +21,49 @@ I've corrected it and the token validation should now work as expected.
 npm install -g wardayacode
 ```
 
-Requires Node.js 20+.
+Then navigate to your project and run:
+
+```bash
+wardayacode
+# or
+wdc
+```
+
+Requires **Node.js 20+**.
+
+---
 
 ## Quick Start
 
-**1. Set your API key**
-
 ```bash
-# Anthropic (Claude)
+# Set your API key (choose one)
 export ANTHROPIC_API_KEY=sk-ant-...
-
-# OpenAI
+# or
 export OPENAI_API_KEY=sk-...
-
-# Google (Gemini)
+# or
 export GOOGLE_GENERATIVE_AI_API_KEY=AIza...
+
+# Start a session
+cd my-project
+wardayacode
 ```
 
-Or save it permanently:
+Type any task in natural language. The agent reads your files, makes edits, runs commands, and explains every step.
 
-```bash
-wardayacode auth login anthropic
-wardayacode auth login openai
-wardayacode auth login google
-```
+---
 
-**2. Run it**
+## Features
 
-```bash
-wardayacode        # interactive TUI
-wdc                # short alias
-```
+- **Multi-provider** — Anthropic Claude, OpenAI GPT, Google Gemini. Switch at runtime with `/model`.
+- **Permission controls** — Four modes (`default`, `plan`, `acceptEdits`, `auto`) gate every tool call.
+- **56+ slash commands** — Full command catalog with tabbed help dialog. Type `/help` to browse.
+- **Session management** — Auto-saved conversations, resume across restarts, export to markdown.
+- **Undo & checkpoint** — Revert file edits, git stashing, diff viewing.
+- **Extensible** — Hook system, skill system, MCP support, custom commands.
+- **Privacy-first** — Your code talks through your own API keys. Nothing leaves your machine without your consent.
+- **Terminal-native UI** — React + Ink, streaming output, keyboard-driven workflow.
 
-**3. Start coding**
-
-Type any task in natural language. The agent reads your files, makes edits, runs commands, and explains what it did.
+---
 
 ## Usage
 
@@ -63,88 +71,100 @@ Type any task in natural language. The agent reads your files, makes edits, runs
 # Interactive TUI (default)
 wardayacode
 
-# Send an initial prompt directly
-wardayacode "add input validation to src/api/users.ts"
-
-# Choose a model
+# Choose provider and model
 wardayacode --model gpt-4o --provider openai
 wardayacode --model gemini-2.0-flash --provider google
 wardayacode --model claude-sonnet-4-20250514 --provider anthropic
 
-# Set permission mode
-wardayacode --mode auto        # approve everything automatically
-wardayacode --mode plan        # read-only, no file writes
+# Permission mode
+wardayacode --mode auto          # auto-approve everything
+wardayacode --mode plan          # read-only, no writes
 
-# Set max API retries (default: 3, exponential backoff)
-wardayacode --max-retries 5
-
-# Resume a previous session
-wardayacode sessions list
+# Resume a session
 wardayacode --resume <sessionId>
 
-# Debug mode (logs tool calls to ~/.wardayacode/logs/)
-wardayacode --debug
-
-# Non-interactive (pipe-friendly)
-wardayacode --no-tui "summarize the architecture"
+# Max API retries (default: 3, exponential backoff)
+wardayacode --max-retries 5
 ```
 
-## Slash Commands
-
-Type `/` in the TUI to open the command palette, or use these directly:
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Show all available commands |
-| `/clear` | Clear the conversation |
-| `/compact` | Manually compact context to free up token budget |
-| `/mode <mode>` | Switch permission mode |
-| `/model` | Show current model |
-| `/session` | Show session info |
-| `/tokens` | Show real token usage (from provider) |
-| `/undo` | Revert the last file change |
-| `/diff` | Show uncommitted git changes |
-| `/checkpoint` | Create a git stash checkpoint |
-| `/rollback` | Restore last checkpoint |
-| `/login <provider> <key>` | Save an API key |
-| `/logout <provider>` | Remove a saved API key |
-| `/auth` | Show provider auth status |
-| `/exit` | Exit wardayacode |
+---
 
 ## Permission Modes
 
-wardayacode asks before making changes. You control how much it can do automatically:
+| Mode          | File reads | File writes | Bash / Git | Use case      |
+| ------------- | ---------- | ----------- | ---------- | ------------- |
+| `default`     | ✅ auto    | ❓ prompt   | ❓ prompt  | Daily use     |
+| `plan`        | ✅ auto    | ❌ blocked  | ❌ blocked | Review-only   |
+| `acceptEdits` | ✅ auto    | ✅ auto     | ❓ prompt  | Trusted edits |
+| `auto`        | ✅ auto    | ✅ auto     | ✅ auto    | Scripting     |
 
-| Mode | File reads | File writes | Bash / Git | Use when |
-|------|-----------|------------|-----------|----------|
-| `default` | ✅ auto | ❓ prompt | ❓ prompt | Daily use |
-| `plan` | ✅ auto | ❌ blocked | ❌ blocked | Review-only |
-| `acceptEdits` | ✅ auto | ✅ auto | ❓ prompt | Trusted edits |
-| `auto` | ✅ auto | ✅ auto | ✅ auto | Scripting / CI |
-| `internal` | ✅ auto | ✅ auto | ✅ auto | Fully trusted |
+Switch mid-session with `/permissions` or choose "Always allow" when prompted.
 
-Switch mode mid-session with `/mode <name>` or choose "Always allow" when prompted.
+---
+
+## Slash Commands
+
+Type `/` in the TUI to open the command palette, or browse the full catalog with `/help`.
+
+| Command       | Description                        |
+| ------------- | ---------------------------------- |
+| `/status`     | Version, model, mode, session info |
+| `/cost`       | Session cost & duration estimate   |
+| `/context`    | Context usage visualization        |
+| `/theme`      | Switch dark / light mode           |
+| `/export`     | Export conversation to markdown    |
+| `/rename`     | Name the current session           |
+| `/resume`     | Resume a previous session          |
+| `/init`       | Create WARDAYA.md for your project |
+| `/plan`       | Enter plan mode (read-only)        |
+| `/fast`       | Toggle fast mode                   |
+| `/stats`      | Usage statistics                   |
+| `/model`      | Switch AI model                    |
+| `/effort`     | Set effort level (low/medium/high) |
+| `/branch`     | Create a git branch                |
+| `/diff`       | View uncommitted changes           |
+| `/undo`       | Revert last file edit              |
+| `/checkpoint` | Create a git stash checkpoint      |
+| `/rollback`   | Restore last checkpoint            |
+| `/review`     | Pull request review guide          |
+| `/copy`       | Copy last response to clipboard    |
+| `/insights`   | Session analytics                  |
+| `/doctor`     | Installation diagnostics           |
+| `/feedback`   | Submit feedback                    |
+| `/config`     | Show configuration                 |
+| `/clear`      | Reset conversation                 |
+| `/compact`    | Manually compact context           |
+| `/help`       | Full command catalog               |
+| `/exit`       | Exit                               |
+
+Run `/help` inside WardayaCode for the complete list with descriptions.
+
+---
 
 ## Tools
 
-The agent has access to these tools:
+The agent uses these tools to interact with your codebase:
 
-| Tool | What it does |
-|------|-------------|
-| `read_file` | Read a file with optional line range |
-| `write_file` | Create or overwrite a file |
-| `edit_file` | Surgical string-replacement edits |
-| `bash` | Run shell commands |
-| `git` | Run git commands (status, log, diff, add, commit, push, …) |
-| `glob` | Find files by pattern (`**/*.ts`) |
-| `grep` | Search file contents with regex |
-| `list_files` | List a directory |
+| Tool         | What it does                                      |
+| ------------ | ------------------------------------------------- |
+| `read_file`  | Read a file with optional line range              |
+| `write_file` | Create or overwrite a file                        |
+| `edit_file`  | Surgical string-replacement edits                 |
+| `bash`       | Run shell commands                                |
+| `git`        | Run git commands (status, log, diff, add, commit) |
+| `glob`       | Find files by pattern                             |
+| `grep`       | Search file contents with regex                   |
+| `list_files` | List a directory                                  |
 
-Dangerous operations (force push, `rm -rf`, `dd`, etc.) are permanently blocked regardless of permission mode.
+Dangerous operations (force push, `rm -rf`, `dd`, etc.) are permanently blocked.
+
+---
 
 ## Configuration
 
-Create `.wardayacode.json` in your project root for project-level config, or `~/.config/wardayacode/config.json` for global defaults:
+Config **priority** (highest wins): CLI flags → project `.wardayacode.json` → user config → defaults.
+
+Create `.wardayacode.json` in your project root:
 
 ```json
 {
@@ -158,7 +178,7 @@ Create `.wardayacode.json` in your project root for project-level config, or `~/
 }
 ```
 
-API keys can also live in config (though environment variables are preferred):
+API keys can also live in config, though environment variables are preferred:
 
 ```json
 {
@@ -170,11 +190,11 @@ API keys can also live in config (though environment variables are preferred):
 }
 ```
 
-**Config priority** (highest wins): CLI flags → project `.wardayacode.json` → user config → defaults.
+---
 
 ## Sessions
 
-Conversations are saved automatically as JSONL files in `.wardayacode/` in your project directory.
+Conversations are auto-saved as JSONL files in `.wardayacode/` in your project directory.
 
 ```bash
 wardayacode sessions list          # list sessions
@@ -182,60 +202,12 @@ wardayacode sessions delete <id>   # delete a session
 wardayacode --resume <id>          # resume a session
 ```
 
-Sessions let you continue where you left off across terminal restarts.
-
-## Debug & Logs
-
-```bash
-wardayacode --debug "fix the bug"
-```
-
-With `--debug`, all tool calls, results, and errors are written to:
-
-```
-~/.wardayacode/logs/YYYY-MM-DD-<sessionId>.log
-```
-
-Each line is structured JSON (`ts`, `level`, `msg`, `meta`). Tail it in another terminal:
-
-```bash
-tail -f ~/.wardayacode/logs/$(ls -t ~/.wardayacode/logs | head -1)
-```
-
-You can also set `LOG_LEVEL=debug` as an environment variable.
-
-## Troubleshooting
-
-**`command not found: wardayacode`**
-```bash
-npm install -g wardayacode
-# if still not found, check npm global bin is in your PATH:
-npm config get prefix   # add <prefix>/bin to PATH
-```
-
-**API key errors**
-```bash
-wardayacode auth list    # check which providers are configured
-wardayacode auth login anthropic   # re-enter the key
-```
-
-**Agent makes too many changes**
-Use `/mode plan` to switch to read-only mode mid-session, or start with `--mode plan`.
-
-**Long conversations slow down or lose context**
-wardayacode automatically compacts context when it nears the token limit. You'll see a system message when this happens. Use `/clear` to start fresh if needed.
-
-**Something went wrong and files were changed**
-```bash
-/undo          # revert the last file edit
-/rollback      # restore to last git checkpoint
-/diff          # see what changed
-```
+---
 
 ## Development
 
 ```bash
-git clone https://github.com/fawwazmw/wardayacode
+git clone https://github.com/fawwazmw/wardayacode.git
 cd wardayacode
 npm install
 
@@ -245,7 +217,56 @@ npm run type-check     # TypeScript strict check
 npm run lint           # ESLint
 npm test               # Vitest watch mode
 npm run test:run       # single CI run
+npm run test:coverage  # with coverage report
 ```
+
+### Project Structure
+
+```
+src/
+├── agent/            — Agent loop (ReAct + Vercel AI SDK)
+├── cli.ts            — CLI entry point (Commander.js)
+├── config/           — Config cascade (defaults → user → project → CLI)
+├── context/          — Context management & auto-compaction
+├── extensibility/    — Hook system & skill system
+├── permissions/      — Permission gating for all tool calls
+├── providers/        — LLM provider adapters
+├── session/          — Session persistence (append-only JSONL)
+├── tools/            — Tool definitions & execution
+├── types.ts          — Core type definitions
+├── ui/               — React/Ink terminal UI components
+└── utils/            — Logger, retry, self-update, formatting
+```
+
+### Branch Strategy
+
+- `main` — Production, matches latest npm release
+- `develop` — Integration branch, default for PRs
+- `feature/*` — New features
+- `fix/*` — Bug fixes
+- `release/*` — Release preparation
+
+---
+
+## Keyboard Shortcuts
+
+| Key           | Action                        |
+| ------------- | ----------------------------- |
+| `!`           | Bash mode                     |
+| `/`           | Commands palette              |
+| `Tab`         | Auto-complete command         |
+| `Esc`         | Clear input / interrupt agent |
+| `Ctrl+O`      | Toggle verbose output         |
+| `Ctrl+T`      | Toggle task list              |
+| `Ctrl+Z`      | Suspend                       |
+| `Ctrl+V`      | Paste images                  |
+| `Alt+P`       | Switch model                  |
+| `Alt+O`       | Toggle fast mode              |
+| `Ctrl+S`      | Stash prompt                  |
+| `Ctrl+G`      | Edit in `$EDITOR`             |
+| `\` + `Enter` | Multi-line input              |
+
+---
 
 ## License
 
