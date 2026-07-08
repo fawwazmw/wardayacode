@@ -146,6 +146,20 @@ describe('Checkpoint', () => {
       expect(diff).toBe('');
     });
   });
+
+  describe('getDetailedDiff()', () => {
+    it('returns git diff output', async () => {
+      mockGitProcess('diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-hello\n+world\n', '', 0);
+      const diff = await checkpoint.getDetailedDiff();
+      expect(diff).toContain('src/foo.ts');
+    });
+
+    it('returns empty string on error', async () => {
+      mockGitError('failed');
+      const diff = await checkpoint.getDetailedDiff();
+      expect(diff).toBe('');
+    });
+  });
 });
 
 // Helper to build a successful process mock inline
