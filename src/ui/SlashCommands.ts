@@ -392,10 +392,29 @@ export async function handleSlashCommand(
     }
 
     case '/statusline':
-      return { handled: true, output: 'Status line shows model, mode, tokens, and session info.\nUse /config to see current settings.' };
+      return { handled: true, output: `Status line shows:\n  Model:     ${ctx.getModel()}\n  Mode:      ${ctx.getPermissionMode()}\n  Messages:  ${ctx.getMessageCount()}\n  Duration:  ${formatDuration(ctx.getSessionDuration())}\nUse /config to see full configuration.` };
 
-    case '/hooks':
-      return { handled: true, output: 'Hooks are shell commands that run on tool events.\nConfigure them in .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.' };
+    case '/hooks': {
+      const { existsSync, readdirSync } = await import('fs');
+      const { join } = await import('path');
+      const { homedir } = await import('os');
+      const hookDirs = [
+        join(ctx.getProjectRoot(), '.wardayacode', 'hooks'),
+        join(homedir(), '.config', 'wardayacode', 'hooks'),
+      ];
+      const hooks: string[] = [];
+      for (const dir of hookDirs) {
+        if (existsSync(dir)) {
+          for (const f of readdirSync(dir).filter(f => f.endsWith('.sh'))) {
+            hooks.push(f);
+          }
+        }
+      }
+      if (hooks.length === 0) {
+        return { handled: true, output: 'No hook scripts found.\nHooks are shell commands that run on tool events.\nAdd .sh files to .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.' };
+      }
+      return { handled: true, output: `Hook scripts:\n  ${hooks.join('\n  ')}` };
+    }
 
     case '/memory': {
       const { existsSync, readdirSync, readFileSync } = await import('fs');
@@ -459,7 +478,7 @@ export async function handleSlashCommand(
     }
 
     case '/stickers':
-      return { handled: true, output: 'Get WardayaCode stickers: https://github.com/fawwazmw/wardayacode' };
+      return { handled: true, output: await ctx.openUrl('https://github.com/fawwazmw/wardayacode') };
 
     case '/permissions':
       return { handled: true, output: `Permission mode: ${ctx.getPermissionMode()}\nUse /mode to change.\nRules are evaluated top-to-bottom; first match wins.` };
