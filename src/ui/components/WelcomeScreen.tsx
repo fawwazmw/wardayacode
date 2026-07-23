@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import type { PermissionMode } from "../../types.js";
 
 const LOGO_LINES = [
-  "██     ██  █████  ██████  ██████   █████  ██    ██  █████   ██████  ██████  ██████  ███████ ",
-  "██     ██ ██   ██ ██   ██ ██   ██ ██   ██  ██  ██  ██   ██ ██      ██    ██ ██   ██ ██      ",
-  "██  █  ██ ███████ ██████  ██   ██ ███████   ████   ███████ ██      ██    ██ ██   ██ █████   ",
-  "██ ███ ██ ██   ██ ██   ██ ██   ██ ██   ██    ██    ██   ██ ██      ██    ██ ██   ██ ██      ",
-  " ███ ███  ██   ██ ██   ██ ██████  ██   ██    ██    ██   ██  ██████  ██████  ██████  ███████ ",
+  "        ███             ███       ",
+  "        ████           ████       ",
+  "        ███████████████████       ",
+  "        ███████████████████       ",
+  "        ████   █████   ████       ",
+  "       █████████████████████      ",
+  "        ███████     ███████       ",
+  "         █████████████████        ",
 ];
+
+/** Colored text fallback for narrow terminals (< 35 cols). */
+const NARROW_LOGO = "WARDACODE";
 
 const MODE_COLORS: Record<string, string> = {
   default: "#818CF8",
@@ -57,6 +63,10 @@ export function WelcomeScreen({
   const codeColor = isDark ? "#C084FC" : "#9333EA";
   const updateColor = isDark ? "#FBBF24" : "#D97706";
 
+  const { stdout } = useStdout();
+  const termWidth = stdout?.columns ?? 80;
+  const showLogo = termWidth >= 35;
+
   const [phase, setPhase] = useState<"glow" | "info" | "ready">("glow");
   const [tipIdx, setTipIdx] = useState(0);
 
@@ -87,19 +97,20 @@ export function WelcomeScreen({
   const tip = TIPS[tipIdx]!;
 
   const renderLogo = () => {
-    const codeStartColumn = 70;
-
-    return LOGO_LINES.map((line, idx) => {
-      const wardayaPart = line.slice(0, codeStartColumn);
-      const codePart = line.slice(codeStartColumn);
-
-      return (
-        <Text key={idx} bold>
-          <Text color={wardayaColor}>{wardayaPart}</Text>
-          <Text color={codeColor}>{codePart}</Text>
+    if (showLogo) {
+      return LOGO_LINES.map((line, idx) => (
+        <Text key={idx} bold color={wardayaColor}>
+          {line}
         </Text>
-      );
-    });
+      ));
+    }
+
+    // Narrow terminal — colored text
+    return (
+      <Text bold color={wardayaColor}>
+        {NARROW_LOGO}
+      </Text>
+    );
   };
 
   return (
