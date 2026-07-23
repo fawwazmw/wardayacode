@@ -768,40 +768,42 @@ export function App({
   const showWelcome = messages.length === 0 && !streamingText && !isLoading;
 
   return (
-    <Box flexDirection="column" height="100%">
-      {showWelcome ? (
-        <WelcomeScreen
-          model={model}
-          permissionMode={currentPermissionMode}
-          sessionId={session.getId()}
-          cwd={process.cwd()}
-          themeMode={themeMode}
-          version={version}
-          latestVersion={updateInfo?.latest}
-          updateAvailable={updateInfo?.updateAvailable ?? false}
-        />
-      ) : (
-        <ChatView
-          messages={messages}
-          streamingText={streamingText}
-          themeMode={themeMode}
-          expandedOutput={expandedOutput}
-        />
-      )}
+    <Box flexDirection="column" minHeight="100%">
+      <Box flexGrow={1}>
+        {showWelcome ? (
+          <WelcomeScreen
+            model={model}
+            permissionMode={currentPermissionMode}
+            sessionId={session.getId()}
+            cwd={process.cwd()}
+            themeMode={themeMode}
+            version={version}
+            latestVersion={updateInfo?.latest}
+            updateAvailable={updateInfo?.updateAvailable ?? false}
+          />
+        ) : (
+          <ChatView
+            messages={messages}
+            streamingText={streamingText}
+            themeMode={themeMode}
+            expandedOutput={expandedOutput}
+          />
+        )}
 
-      {pendingPermission && (
-        <PermissionPrompt
-          toolName={pendingPermission.toolName}
-          args={pendingPermission.args}
-          reason={pendingPermission.reason}
-          themeMode={themeMode}
-          onDecision={handlePermissionDecision}
-        />
-      )}
+        {pendingPermission && (
+          <PermissionPrompt
+            toolName={pendingPermission.toolName}
+            args={pendingPermission.args}
+            reason={pendingPermission.reason}
+            themeMode={themeMode}
+            onDecision={handlePermissionDecision}
+          />
+        )}
 
-      {showHelp && (
-        <HelpDialog themeMode={themeMode} onClose={() => setShowHelp(false)} />
-      )}
+        {showHelp && (
+          <HelpDialog themeMode={themeMode} onClose={() => setShowHelp(false)} />
+        )}
+      </Box>
 
       <InputBar
         onSubmit={handleSubmit}
