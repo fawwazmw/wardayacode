@@ -5,6 +5,7 @@ import { render } from 'ink';
 import React from 'react';
 import chalk from 'chalk';
 import { createInterface } from 'node:readline/promises';
+import { type LanguageModel } from 'ai';
 import {
   loadConfig,
   setProviderApiKey,
@@ -17,6 +18,7 @@ import { logger } from './utils/logger.js';
 import { createProvider } from './providers/index.js';
 import { ToolRegistry, registerCoreTools, UndoManager } from './tools/index.js';
 import { PermissionSystem } from './permissions/PermissionSystem.js';
+import { HookSystem } from './extensibility/HookSystem.js';
 import { Agent } from './agent/index.js';
 import { buildSystemPrompt } from './agent/systemPrompt.js';
 import { Session } from './session/Session.js';
@@ -247,6 +249,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   registerCoreTools(toolRegistry, undoManager);
 
   const permissions = new PermissionSystem(config.permissionMode);
+  const hooks = new HookSystem();
 
   const projectRoot = process.cwd();
   const systemPrompt = options.systemPrompt ?? config.systemPrompt ?? await buildSystemPrompt(projectRoot);
@@ -255,6 +258,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     model,
     toolRegistry,
     permissions,
+    hookSystem: hooks,
     systemPrompt,
     maxTokens: config.maxTokens,
     temperature: config.temperature,
@@ -277,7 +281,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     // Ink owns the terminal — route logs to the file only so warn/error lines
     // don't corrupt the frame or duplicate messages the UI already shows.
     logger.setConsoleOutput(false);
-    runTUI(agent, session, config, undoManager, checkpoint, permissions, currentVersion, initialPrompt);
+    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, currentVersion, initialPrompt);
   } else {
     await runPlainText(agent, session, permissions, currentVersion, initialPrompt);
   }
@@ -287,6 +291,7 @@ function runTUI(
   agent: Agent,
   session: Session,
   config: { model: string; permissionMode: PermissionMode; theme: 'dark' | 'light' },
+  languageModel: LanguageModel,
   undoManager: UndoManager,
   checkpoint: Checkpoint,
   permissions: PermissionSystem,
@@ -305,6 +310,7 @@ function runTUI(
         agent,
         session,
         model: config.model,
+        languageModel,
         permissionMode: config.permissionMode,
         themeMode: config.theme,
         undoManager,
@@ -356,8 +362,13 @@ async function runPlainText(
     process.exit(0);
   });
 
-  // In plain text mode, auto-approve all tools (no interactive prompt available)
-  permissions.setMode('auto');
+  // In plain text mode, ensure no prompt handler is registered (can't prompt in non-TUI),
+  // so any denied tool gets hard-denied rather than prompting indefinitely.
+  // The user's configured permission mode is preserved.
+  permissions.setPromptHandler(async () => {
+    console.error(chalk.yellow('[Permission denied: no TUI prompt available in --no-tui mode]'));
+    return 'deny';
+  });
 
   await session.append({
     id: crypto.randomUUID(),
