@@ -188,7 +188,7 @@ export class Agent extends EventEmitter<AgentEvents> {
       }
       // Use modified input if the hook changed it
       if (hookResult?.modifiedInput) {
-        args = hookResult.modifiedInput;
+        args = hookResult.modifiedInput as Record<string, unknown>;
       }
     }
 
@@ -352,7 +352,7 @@ export class Agent extends EventEmitter<AgentEvents> {
         }
       }
     } finally {
-      await this.emitHook('sessionEnd', {});
+      await this.emitHook('sessionEnd', {} as Record<string, unknown>);
     }
 
     throw lastError ?? new Error('Agent run failed for unknown reason');
