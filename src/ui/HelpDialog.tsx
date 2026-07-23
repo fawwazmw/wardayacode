@@ -73,17 +73,17 @@ const HELP_COMMANDS: HelpCommand[] = [
   { name: '/resume', desc: 'Resume a previous conversation' },
   { name: '/review', desc: 'Review a pull request' },
   { name: '/rewind', desc: 'Restore the code and/or conversation to a previous point' },
-  { name: '/sandbox', desc: 'Configure the sandbox' },
+  { name: '/sandbox', desc: 'Block bash, git, and write tools' },
   { name: '/security-review', desc: 'Complete a security review of the pending changes on the current branch' },
   { name: '/skills', desc: 'List available skills' },
   { name: '/stats', desc: 'Show your WardayaCode usage statistics and activity' },
-  { name: '/status', desc: 'Show WardayaCode status including version, model, account, API connectivity, and tool statuses' },
+  { name: '/status', desc: 'Show version, model, mode, session, and usage stats' },
   { name: '/statusline', desc: "Set up WardayaCode's status line UI" },
   { name: '/stickers', desc: 'Order WardayaCode stickers' },
   { name: '/tasks', desc: 'List and manage background tasks' },
   { name: '/team-onboarding', desc: 'Help teammates ramp on WardayaCode with a guide from your usage' },
   { name: '/theme', desc: 'Change the theme' },
-  { name: '/tui', desc: 'Set the terminal UI renderer (default | fullscreen)' },
+  { name: '/tui', desc: 'Set the terminal UI renderer (default only)' },
 ];
 
 // Grouped so related shortcuts render with a blank line between blocks, matching

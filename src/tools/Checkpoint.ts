@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process';
 
 export class Checkpoint {
   private projectRoot: string;
-  private stashCreated = false;
+  /** Number of stashes created by this Checkpoint (supports multiple). */
+  private stashCount = 0;
 
   constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
@@ -22,7 +23,7 @@ export class Checkpoint {
       if (status.trim().length === 0) return false;
 
       await this.runGit(['stash', 'push', '-m', `wardayacode: ${message}`]);
-      this.stashCreated = true;
+      this.stashCount++;
       return true;
     } catch {
       return false;
@@ -30,11 +31,11 @@ export class Checkpoint {
   }
 
   async rollback(): Promise<boolean> {
-    if (!this.stashCreated) return false;
+    if (this.stashCount === 0) return false;
 
     try {
       await this.runGit(['stash', 'pop']);
-      this.stashCreated = false;
+      this.stashCount--;
       return true;
     } catch {
       return false;
@@ -52,15 +53,16 @@ export class Checkpoint {
 
   async getDiff(): Promise<string> {
     try {
-      return await this.runGit(['diff', '--stat']);
+      return await this.runGit(['diff']);
     } catch {
       return '';
     }
   }
 
-  async getDetailedDiff(): Promise<string> {
+  /** Summarize changed files (file names only, no content). */
+  async getDiffSummary(): Promise<string> {
     try {
-      return await this.runGit(['diff']);
+      return await this.runGit(['diff', '--stat']);
     } catch {
       return '';
     }

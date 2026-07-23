@@ -8,7 +8,7 @@ export interface SlashCommandEntry {
 
 export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/help', description: 'Show available commands' },
-  { name: '/status', description: 'Show WardayaCode status including version, model, account, API connectivity, and tool statuses' },
+  { name: '/status', description: 'Show version, model, mode, session, and usage stats' },
   { name: '/cost', description: 'Show total cost and duration of the current session' },
   { name: '/theme', description: 'Change the theme', args: '<dark|light>' },
   { name: '/export', description: 'Export the current conversation to a file' },
@@ -34,7 +34,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/memory', description: 'Edit Wardaya memory files' },
   { name: '/anw', description: 'Ask a quick side question without interrupting the main conversation' },
   { name: '/effort', description: 'Set effort level for model usage', args: '<level>' },
-  { name: '/tui', description: 'Set the terminal UI renderer (default | fullscreen)', args: '<mode>' },
+  { name: '/tui', description: 'Set the terminal UI renderer (default only)', args: '<mode>' },
   { name: '/ide', description: 'Manage IDE integrations and show status' },
   { name: '/stickers', description: 'Get link to order WardayaCode stickers' },
   { name: '/permissions', description: 'Manage allow & deny tool permission rules' },
@@ -210,13 +210,17 @@ export async function handleSlashCommand(
 
     case '/status': {
       const sUsage = ctx.getTokenUsage();
+      const sDur = formatDuration(ctx.getSessionDuration());
       const lines = [
         `Version:  ${ctx.getVersion()}`,
         `Model:    ${ctx.getModel()}`,
         `Mode:     ${ctx.getPermissionMode()}`,
-        `Session:  ${ctx.getSessionId()}`,
+        `Fast:     ${ctx.getFastMode() ? 'on' : 'off'}`,
+        `Effort:   ${ctx.getEffort()}`,
+        `Session:  ${ctx.getSessionId().slice(0, 8)}`,
+        `Uptime:   ${sDur}`,
         `Messages: ${ctx.getMessageCount()}`,
-        `Tokens:   ~${sUsage.input} in / ~${sUsage.output} out`,
+        `Tokens:   ~${sUsage.input.toLocaleString()} in / ~${sUsage.output.toLocaleString()} out`,
       ];
       return { handled: true, output: lines.join('\n') };
     }
@@ -339,21 +343,32 @@ export async function handleSlashCommand(
     }
 
     case '/skills': {
-      const { existsSync, readdirSync } = await import('fs');
+      const { existsSync, readdirSync, readFileSync } = await import('fs');
       const { join } = await import('path');
       const root = ctx.getProjectRoot();
       const skillsDir = join(root, '.wardayacode', 'skills');
-      const skills: string[] = [];
-      if (existsSync(skillsDir)) {
-        const files = readdirSync(skillsDir).filter(f => f.endsWith('.md') || f.endsWith('.js'));
-        for (const f of files) {
-          skills.push(f.replace(/\.(md|js)$/, ''));
+      if (!existsSync(skillsDir)) {
+        return { handled: true, output: 'No skills directory found.\nCreate .md or .js files in .wardayacode/skills/ to define custom skills.' };
+      }
+      const files = readdirSync(skillsDir).filter(f => f.endsWith('.md') || f.endsWith('.js'));
+      if (files.length === 0) {
+        return { handled: true, output: 'No skill files found in .wardayacode/skills/.\nCreate .md or .js files to define custom skills.' };
+      }
+      const lines: string[] = [];
+      for (const f of files) {
+        const name = f.replace(/\.(md|js)$/, '');
+        let desc = f.endsWith('.md') ? 'Markdown skill' : 'JavaScript skill';
+        // Try to extract the first heading line or a brief description from .md files
+        if (f.endsWith('.md')) {
+          try {
+            const content = readFileSync(join(skillsDir, f), 'utf-8');
+            const heading = content.match(/^#\s+(.+)/m);
+            if (heading) desc = heading[1]!;
+          } catch { /* use default description */ }
         }
+        lines.push(`  ${name.padEnd(20)} ${desc}`);
       }
-      if (skills.length === 0) {
-        return { handled: true, output: 'Available skills: planning, research, code review, debugging, testing, documentation\nAdd custom skills to .wardayacode/skills/.' };
-      }
-      return { handled: true, output: `Custom skills:\n  ${skills.join('\n  ')}\n\nBuilt-in skills: planning, research, code review, debugging, testing, documentation` };
+      return { handled: true, output: `Custom skills (${files.length}):\n${lines.join('\n')}\n\nSkills are loaded from .wardayacode/skills/.` };
     }
 
     case '/release-notes': {
@@ -456,7 +471,7 @@ export async function handleSlashCommand(
 
     case '/tui': {
       if (!arg) {
-        return { handled: true, output: 'Usage: /tui <default|fullscreen>' };
+        return { handled: true, output: 'Usage: /tui <default>\nOnly the default renderer is available. "fullscreen" mode is not implemented.' };
       }
       return { handled: true, output: ctx.setTuiRenderer(arg) };
     }
@@ -495,14 +510,39 @@ export async function handleSlashCommand(
     }
 
     case '/doctor': {
+      const { execSync } = await import('node:child_process');
       const issues: string[] = [];
-      // Basic checks
+
+      // Version
       try {
         const v = ctx.getVersion();
         if (v) issues.push(`✓ Version: ${v}`);
-      } catch { issues.push('✗ Could not determine version'); }
+      } catch { issues.push('✗ Version: unknown'); }
+
+      // Model
       issues.push(`✓ Model: ${ctx.getModel()}`);
+
+      // Session
       issues.push(`✓ Session: ${ctx.getSessionId().slice(0, 8)}`);
+
+      // Permission mode
+      issues.push(`✓ Mode: ${ctx.getPermissionMode()}`);
+
+      // Git availability
+      try {
+        execSync('git --version', { stdio: 'pipe' });
+        issues.push('✓ Git: available');
+      } catch {
+        issues.push('✗ Git: not found');
+      }
+
+      // Project root exists
+      const root = ctx.getProjectRoot();
+      try {
+        const { existsSync } = await import('fs');
+        issues.push(`✓ Project root: ${existsSync(root) ? 'exists' : 'missing'}`);
+      } catch { issues.push('✓ Project root: readable'); }
+
       return { handled: true, output: `WardayaCode diagnostics:\n${issues.join('\n')}` };
     }
 
@@ -545,13 +585,13 @@ export async function handleSlashCommand(
       const enabled = ctx.getSandboxEnabled();
       if (arg === 'enable') {
         ctx.setSandboxEnabled(true);
-        return { handled: true, output: 'Sandbox enabled. File access is restricted to the project directory.' };
+        return { handled: true, output: 'Sandbox enabled. Bash, git, and write tools are now blocked.' };
       }
       if (arg === 'disable') {
         ctx.setSandboxEnabled(false);
-        return { handled: true, output: 'Sandbox disabled. File access is unrestricted.' };
+        return { handled: true, output: 'Sandbox disabled. Tool restrictions removed.' };
       }
-      return { handled: true, output: `Sandbox: ${enabled ? 'enabled' : 'disabled'}\nThe sandbox restricts file operations to the project directory.\nUse /sandbox enable or /sandbox disable.` };
+      return { handled: true, output: `Sandbox: ${enabled ? 'enabled' : 'disabled'}\nSandbox denies bash, git, write, and edit tools.\nUse /sandbox enable or /sandbox disable.` };
     }
 
     case '/security-review': {

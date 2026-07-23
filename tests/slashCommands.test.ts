@@ -83,7 +83,7 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('0.5.0');
     expect(result.output).toContain('claude-sonnet-4-20250514');
     expect(result.output).toContain('default');
-    expect(result.output).toContain('test-session-id-1234');
+    expect(result.output).toContain('test-ses');
     expect(result.output).toContain('Messages: 5');
   });
 
@@ -240,7 +240,7 @@ describe('handleSlashCommand', () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/skills', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('planning');
+    expect(result.output).toContain('No skills directory found');
   });
 
   it('handles /release-notes', async () => {
