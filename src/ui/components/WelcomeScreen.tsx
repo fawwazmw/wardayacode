@@ -35,13 +35,6 @@ export function WelcomeScreen({
   const mutedColor = isDark ? "#555555" : "#AAAAAA";
   const keyColor = isDark ? "#A78BFA" : "#7C3AED";
   const accentColor = isDark ? "#60A5FA" : "#2563EB";
-  const modeColor: Record<string, string> = {
-    default: "#818CF8",
-    plan: "#FBBF24",
-    acceptEdits: "#34D399",
-    auto: "#22D3EE",
-    internal: "#F87171",
-  };
 
   const shortCwd = cwd.replace(/^\/home\/[^/]+/, "~");
   const modeLabel = permissionMode.charAt(0).toUpperCase() + permissionMode.slice(1);
