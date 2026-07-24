@@ -2,9 +2,9 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { PermissionMode } from "../../types.js";
 
-// W monogram in pixel-box style (3 lines)
+// W monogram in pixel-box style (3 lines, uniform width for proper centering)
 const W_SYMBOL = [
-  " ▐▛█ █▜▌",
+  " ▐▛█ █▜▌ ",
   "▝▜█████▛▘",
   "  ▘█ █▝  ",
 ];
@@ -47,7 +47,7 @@ export function WelcomeScreen({
   const modeLabel = permissionMode.charAt(0).toUpperCase() + permissionMode.slice(1);
 
   return (
-    <Box flexDirection="column" paddingX={1} paddingY={1} alignItems="center">
+    <Box flexDirection="column" width="100%" flexGrow={1} alignItems="center" justifyContent="center">
       {/* W symbol */}
       <Box flexDirection="column" alignItems="center">
         {W_SYMBOL.map((line, i) => (
