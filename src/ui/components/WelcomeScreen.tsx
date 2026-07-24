@@ -1,35 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { Box, Text, useStdout } from "ink";
+import React from "react";
+import { Box, Text } from "ink";
 import type { PermissionMode } from "../../types.js";
 
-const LOGO_LINES = [
-  "        ███             ███       ",
-  "        ████           ████       ",
-  "        ███████████████████       ",
-  "        ███████████████████       ",
-  "        ████   █████   ████       ",
-  "       █████████████████████      ",
-  "        ███████     ███████       ",
-  "         █████████████████        ",
-];
-
-/** Colored text fallback for narrow terminals (< 35 cols). */
-const NARROW_LOGO = "WARDACODE";
-
-const MODE_COLORS: Record<string, string> = {
-  default: "#818CF8",
-  plan: "#FBBF24",
-  acceptEdits: "#34D399",
-  auto: "#22D3EE",
-  internal: "#F87171",
-};
-
-const TIPS = [
-  ["Type a message", "to start coding with AI"],
-  ["Type /", "to open the command palette"],
-  ["Press Ctrl+C", "to cancel current operation"],
-  ["/undo", "to revert the last file change"],
-  ["/diff", "to see uncommitted git changes"],
+// W monogram in pixel-box style (3 lines)
+const W_SYMBOL = [
+  " ▐▛█ █▜▌",
+  "▝▜█████▛▘",
+  "  ▘█ █▝  ",
 ];
 
 interface WelcomeScreenProps {
@@ -54,166 +31,71 @@ export function WelcomeScreen({
   updateAvailable = false,
 }: WelcomeScreenProps): React.ReactElement {
   const isDark = themeMode === "dark";
-  const mutedColor = isDark ? "#555555" : "#AAAAAA";
   const dimColor = isDark ? "#444444" : "#BBBBBB";
-  const textColor = isDark ? "#A0A0A0" : "#555555";
+  const mutedColor = isDark ? "#555555" : "#AAAAAA";
   const keyColor = isDark ? "#A78BFA" : "#7C3AED";
-  const cmdColor = isDark ? "#C084FC" : "#9333EA";
-  const wardayaColor = isDark ? "#60A5FA" : "#2563EB";
-  const codeColor = isDark ? "#C084FC" : "#9333EA";
-  const updateColor = isDark ? "#FBBF24" : "#D97706";
-
-  const { stdout } = useStdout();
-  const termWidth = stdout?.columns ?? 80;
-  const showLogo = termWidth >= 35;
-
-  const [phase, setPhase] = useState<"glow" | "info" | "ready">("glow");
-  const [tipIdx, setTipIdx] = useState(0);
-
-  useEffect(() => {
-    if (phase === "glow") {
-      const timer = setTimeout(() => setPhase("info"), 250);
-      return () => clearTimeout(timer);
-    }
-    if (phase === "info") {
-      const timer = setTimeout(() => setPhase("ready"), 250);
-      return () => clearTimeout(timer);
-    }
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase === "ready") {
-      const interval = setInterval(
-        () => setTipIdx((prev) => (prev + 1) % TIPS.length),
-        5000,
-      );
-      return () => clearInterval(interval);
-    }
-  }, [phase]);
-
-  const shortCwd = cwd.replace(/^\/home\/[^/]+/, "~");
-  const modeColor = MODE_COLORS[permissionMode] ?? keyColor;
-
-  const tip = TIPS[tipIdx]!;
-
-  const renderLogo = () => {
-    if (showLogo) {
-      return LOGO_LINES.map((line, idx) => (
-        <Text key={idx} bold color={wardayaColor}>
-          {line}
-        </Text>
-      ));
-    }
-
-    // Narrow terminal — colored text
-    return (
-      <Text bold color={wardayaColor}>
-        {NARROW_LOGO}
-      </Text>
-    );
+  const accentColor = isDark ? "#60A5FA" : "#2563EB";
+  const modeColor: Record<string, string> = {
+    default: "#818CF8",
+    plan: "#FBBF24",
+    acceptEdits: "#34D399",
+    auto: "#22D3EE",
+    internal: "#F87171",
   };
 
+  const shortCwd = cwd.replace(/^\/home\/[^/]+/, "~");
+  const modeLabel = permissionMode.charAt(0).toUpperCase() + permissionMode.slice(1);
+
   return (
-    <Box
-      flexDirection="column"
-      paddingX={2}
-      flexGrow={1}
-      justifyContent="center"
-    >
+    <Box flexDirection="column" paddingX={1} paddingY={1} alignItems="center">
+      {/* W symbol */}
       <Box flexDirection="column" alignItems="center">
-        <Box flexDirection="column" alignItems="center">
-          <Box flexDirection="column">{renderLogo()}</Box>
-          <Box marginTop={1}>
-            <Text color={codeColor}>agentic coding in your terminal</Text>
-          </Box>
-        </Box>
+        {W_SYMBOL.map((line, i) => (
+          <Text key={i} bold color={accentColor}>
+            {line}
+          </Text>
+        ))}
       </Box>
 
-      {(phase === "info" || phase === "ready") && (
-        <Box flexDirection="column" alignItems="center" marginTop={1}>
-          <Box gap={1}>
-            <Text color={dimColor}>v{version}</Text>
-            <Text color={dimColor}>·</Text>
-            <Text color={keyColor}>{model}</Text>
-            <Text color={dimColor}>·</Text>
-            <Text color={modeColor}>{permissionMode}</Text>
-          </Box>
-          <Text color={dimColor}>{shortCwd}</Text>
-          {updateAvailable && latestVersion && (
-            <Box marginTop={1} flexDirection="column" alignItems="center">
-              <Text color={updateColor}>
-                Update available: v{version} → v{latestVersion}
-              </Text>
-              <Text color={dimColor}>
-                Run <Text color={keyColor}>wardayacode update</Text>
-              </Text>
-            </Box>
-          )}
+      {/* WDC · Wardayacode branding */}
+      <Box marginTop={1}>
+        <Text bold>
+          <Text color={accentColor}>WDC</Text>
+          <Text color={dimColor}> · </Text>
+          <Text>Wardayacode</Text>
+          <Text color={dimColor}> v{version}</Text>
+        </Text>
+      </Box>
+
+      {/* Model + permission mode */}
+      <Text color={mutedColor}>
+        {model} · {modeLabel}
+      </Text>
+
+      {/* Working directory */}
+      <Text color={dimColor}>{shortCwd}</Text>
+
+      {/* Update available banner */}
+      {updateAvailable && latestVersion && (
+        <Box marginTop={1}>
+          <Text color={isDark ? "#FBBF24" : "#D97706"}>
+            Update available: v{version} → v{latestVersion}
+          </Text>
+          <Text color={dimColor}>
+            {' '}Run wardayacode update
+          </Text>
         </Box>
       )}
 
-      {phase === "ready" && (
-        <Box flexDirection="column" alignItems="center" marginTop={1}>
-          <Box
-            borderStyle="round"
-            borderColor={dimColor}
-            paddingX={2}
-            paddingY={0}
-            flexDirection="column"
-          >
-            <Box gap={3}>
-              <Box flexDirection="column">
-                <Text color={mutedColor} bold>
-                  Keys
-                </Text>
-                <Text>
-                  <Text color={keyColor}>Enter </Text>
-                  <Text color={textColor}>Send</Text>
-                </Text>
-                <Text>
-                  <Text color={keyColor}>/ </Text>
-                  <Text color={textColor}>Commands</Text>
-                </Text>
-                <Text>
-                  <Text color={keyColor}>↑ ↓ </Text>
-                  <Text color={textColor}>History</Text>
-                </Text>
-                <Text>
-                  <Text color={keyColor}>Ctrl+C </Text>
-                  <Text color={textColor}>Cancel</Text>
-                </Text>
-              </Box>
-              <Box flexDirection="column">
-                <Text color={mutedColor} bold>
-                  Commands
-                </Text>
-                <Text>
-                  <Text color={cmdColor}>/help </Text>
-                  <Text color={textColor}>Show all</Text>
-                </Text>
-                <Text>
-                  <Text color={cmdColor}>/mode </Text>
-                  <Text color={textColor}>Permissions</Text>
-                </Text>
-                <Text>
-                  <Text color={cmdColor}>/undo </Text>
-                  <Text color={textColor}>Revert edit</Text>
-                </Text>
-                <Text>
-                  <Text color={cmdColor}>/diff </Text>
-                  <Text color={textColor}>Git changes</Text>
-                </Text>
-              </Box>
-            </Box>
-          </Box>
-
-          <Box marginTop={1}>
-            <Text color={dimColor}>
-              <Text color={keyColor}>{tip[0]}</Text> {tip[1]}
-            </Text>
-          </Box>
-        </Box>
-      )}
+      {/* Tips row */}
+      <Box marginTop={1}>
+        <Text color={mutedColor}>
+          <Text color={keyColor}>Type a message</Text>
+          {' '}to start coding with AI {'  '}
+          <Text color={keyColor}>/help</Text>
+          {' '}for commands
+        </Text>
+      </Box>
     </Box>
   );
 }
