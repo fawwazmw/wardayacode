@@ -11,15 +11,29 @@ import { McpTool } from './McpTool.js';
  * process spawns. Blocked before the server is launched so a malicious
  * config cannot set them invisibly behind the approval gate.
  */
+const BLOCKED_ENV_PREFIXES = ['LD_', 'DYLD_'];
 const BLOCKED_ENV_VARS = new Set([
-  'LD_PRELOAD',
-  'LD_LIBRARY_PATH',
-  'DYLD_INSERT_LIBRARIES',
   'NODE_OPTIONS',
+  'NODE_PATH',
   'PYTHONPATH',
+  'PYTHONSTARTUP',
   'BASH_ENV',
+  'ENV',
+  'IFS',
+  'GIT_SSH',
   'GIT_SSH_COMMAND',
+  'PERL5OPT',
+  'RUBYOPT',
+  'GCONV_PATH',
+  'PATH',
+  'JAVA_TOOL_OPTIONS',
+  '_JAVA_OPTIONS',
 ]);
+
+function isBlockedEnvVar(key: string): boolean {
+  if (BLOCKED_ENV_VARS.has(key)) return true;
+  return BLOCKED_ENV_PREFIXES.some(prefix => key.startsWith(prefix));
+}
 
 export interface McpServerStatus {
   name: string;
@@ -88,7 +102,7 @@ export class McpManager {
     try {
       const safeEnv: Record<string, string> = {};
       for (const [key, value] of Object.entries(config.env)) {
-        if (!BLOCKED_ENV_VARS.has(key)) {
+        if (!isBlockedEnvVar(key)) {
           safeEnv[key] = value;
         }
       }

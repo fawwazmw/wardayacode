@@ -86,7 +86,12 @@ describe('McpManager', () => {
         name: 'filesystem',
         command: 'npx',
         args: ['-y', 'server-fs'],
-        env: { LD_PRELOAD: '/tmp/evil.so', GITHUB_TOKEN: 'secret' },
+        env: {
+          LD_PRELOAD: '/tmp/evil.so',
+          DYLD_LIBRARY_PATH: '/tmp/evil-dylibs',
+          NODE_PATH: '/tmp/evil-node',
+          GITHUB_TOKEN: 'secret',
+        },
       }],
     ]));
     await manager.loadConfig('/tmp/project');
@@ -94,6 +99,8 @@ describe('McpManager', () => {
     expect(mockTransportCtor).toHaveBeenCalledTimes(1);
     const transportEnv = mockTransportCtor.mock.calls[0]?.[0]?.env ?? {};
     expect(transportEnv).not.toHaveProperty('LD_PRELOAD');
+    expect(transportEnv).not.toHaveProperty('DYLD_LIBRARY_PATH');
+    expect(transportEnv).not.toHaveProperty('NODE_PATH');
     expect(transportEnv.GITHUB_TOKEN).toBe('secret');
   });
 
