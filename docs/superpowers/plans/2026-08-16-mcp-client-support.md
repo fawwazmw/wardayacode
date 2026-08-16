@@ -200,17 +200,20 @@ git commit -m "feat: MCP server config loading"
 
 ---
 
-### Task 2: McpTool + McpManager
+### Task 2: McpTool + McpManager (+ ToolRegistry.unregister)
 
 **Files:**
 - Create: `src/mcp/McpTool.ts`
 - Create: `src/mcp/McpManager.ts`
+- Modify: `src/tools/ToolRegistry.ts`
 - Test: `tests/mcpTool.test.ts`
 - Test: `tests/mcpManager.test.ts`
+- Test: `tests/toolRegistry.test.ts`
 
 **Interfaces:**
-- Consumes: `McpServerConfig` from `./config.js` (Task 1), `ToolRegistry` (`register`/`unregister` — `unregister` added in Task 3, so use a `ToolRegistry`-shaped mock in this task's tests)
+- Consumes: `McpServerConfig` from `./config.js` (Task 1), `ToolRegistry` (needs `unregister`, added in this task)
 - Produces:
+  - `ToolRegistry.unregister(name: string): void`
   - `class McpTool extends Tool` — constructor `(manager, server: string, toolName: string, description: string, inputSchema: Record<string, unknown>)`; `definition.name` = `mcp__<server>__<toolName>`
   - `class McpManager` — constructor `(registry: ToolRegistry)`; methods `loadConfig(projectRoot): Promise<void>`, `getConfigNames(): string[]`, `getStatus(): McpServerStatus[]`, `connect(name): Promise<string>`, `disconnect(name): Promise<string>`, `disconnectAll(): Promise<void>`, `callTool(server, tool, args): Promise<ToolResult>`
 
@@ -579,36 +582,20 @@ function extractText(content: Array<{ type?: string; text?: string }>): string {
 
 Note: `McpTool` imports `McpManager` as a type only, so the circular import between the two files is safe at runtime.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Add ToolRegistry.unregister (needed by McpManager.disconnect)**
 
-Run: `npx vitest run tests/mcpTool.test.ts tests/mcpManager.test.ts`
-Expected: PASS (11 tests)
+Modify `src/tools/ToolRegistry.ts` — add the method after the existing `list()` method:
 
-Note: this task's tests mock `ToolRegistry` (which lacks `unregister` until Task 3). If `npm run type-check` complains about `unregister` on the real `ToolRegistry` import, that resolves in Task 3 — the mock avoids it here.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/mcp/McpTool.ts src/mcp/McpManager.ts tests/mcpTool.test.ts tests/mcpManager.test.ts
-git commit -m "feat: MCP manager and tool adapter"
+```typescript
+  /**
+   * Remove a registered tool
+   */
+  unregister(name: string): void {
+    this.tools.delete(name);
+  }
 ```
 
----
-
-### Task 3: ToolRegistry.unregister + PermissionSystem MCP Rule
-
-**Files:**
-- Modify: `src/tools/ToolRegistry.ts`
-- Modify: `src/permissions/PermissionSystem.ts`
-- Test: `tests/toolRegistry.test.ts`
-- Test: `tests/permissions.test.ts`
-
-**Interfaces:**
-- Produces: `ToolRegistry.unregister(name: string): void`; `mcp__*` deny rule in `PermissionSystem` for all modes; wildcard tool-name matching via `minimatch`
-
-- [ ] **Step 1: Write the failing tests**
-
-Add to `tests/toolRegistry.test.ts` (append inside the existing top-level `describe`):
+Add a test to `tests/toolRegistry.test.ts` (append inside the existing top-level `describe`):
 
 ```typescript
   it('unregister removes a tool', () => {
@@ -622,6 +609,34 @@ Add to `tests/toolRegistry.test.ts` (append inside the existing top-level `descr
 ```
 
 > `EchoTool` is the concrete `Tool` subclass already defined at the top of `tests/toolRegistry.test.ts`.
+
+- [ ] **Step 5: Run tests and type-check to verify they pass**
+
+Run: `npx vitest run tests/mcpTool.test.ts tests/mcpManager.test.ts tests/toolRegistry.test.ts`
+Expected: PASS (11 + 1 = 12 tests)
+
+Run: `npm run type-check`
+Expected: PASS — no errors (unregister now exists on `ToolRegistry`, so `McpManager` compiles)
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/mcp/McpTool.ts src/mcp/McpManager.ts src/tools/ToolRegistry.ts tests/mcpTool.test.ts tests/mcpManager.test.ts tests/toolRegistry.test.ts
+git commit -m "feat: MCP manager and tool adapter"
+```
+
+---
+
+### Task 3: PermissionSystem MCP Rule
+
+**Files:**
+- Modify: `src/permissions/PermissionSystem.ts`
+- Test: `tests/permissions.test.ts`
+
+**Interfaces:**
+- Produces: `mcp__*` deny rule in `PermissionSystem` for all modes; wildcard tool-name matching via `minimatch`
+
+- [ ] **Step 1: Write the failing tests**
 
 Add to `tests/permissions.test.ts` (append inside the existing top-level `describe`):
 
@@ -647,21 +662,10 @@ Add to `tests/permissions.test.ts` (append inside the existing top-level `descri
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npx vitest run tests/toolRegistry.test.ts tests/permissions.test.ts`
-Expected: FAIL — "registry.unregister is not a function" and "mcp__*" tool allowed/not matching deny rule
+Run: `npx vitest run tests/permissions.test.ts`
+Expected: FAIL — `mcp__*` tool allowed (no deny rule matches) in default and auto modes
 
 - [ ] **Step 3: Write minimal implementation**
-
-Modify `src/tools/ToolRegistry.ts` — add the method (after the existing `list()` method):
-
-```typescript
-  /**
-   * Remove a registered tool
-   */
-  unregister(name: string): void {
-    this.tools.delete(name);
-  }
-```
 
 Modify `src/permissions/PermissionSystem.ts`:
 
@@ -699,8 +703,8 @@ Modify `matchesRule()` to support wildcards in the tool name (it currently only 
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run tests/toolRegistry.test.ts tests/permissions.test.ts`
-Expected: PASS (existing + 3 new tests)
+Run: `npx vitest run tests/permissions.test.ts`
+Expected: PASS (existing + 2 new tests)
 
 - [ ] **Step 5: Run full suite to confirm nothing broke**
 
@@ -710,8 +714,8 @@ Expected: PASS — all test files green
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/tools/ToolRegistry.ts src/permissions/PermissionSystem.ts tests/toolRegistry.test.ts tests/permissions.test.ts
-git commit -m "feat: ToolRegistry.unregister and MCP permission rule"
+git add src/permissions/PermissionSystem.ts tests/permissions.test.ts
+git commit -m "feat: MCP permission rule"
 ```
 
 ---
