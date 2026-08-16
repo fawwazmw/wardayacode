@@ -69,6 +69,34 @@ describe('McpManager', () => {
     expect(manager.getServerCommand('unknown')).toBeUndefined();
   });
 
+  it('includes env in the returned command string when present', async () => {
+    mockLoadMcpConfig.mockResolvedValue(new Map([
+      ['filesystem', { name: 'filesystem', command: 'npx', args: ['-y', 'server-fs'], env: { GITHUB_TOKEN: 'secret', FOO: 'bar' } }],
+    ]));
+    await manager.loadConfig('/tmp/project');
+    const cmd = manager.getServerCommand('filesystem');
+    expect(cmd).toContain('npx -y server-fs');
+    expect(cmd).toContain('env=');
+    expect(cmd).toContain('GITHUB_TOKEN');
+  });
+
+  it('filters blocked env vars before spawning', async () => {
+    mockLoadMcpConfig.mockResolvedValue(new Map([
+      ['filesystem', {
+        name: 'filesystem',
+        command: 'npx',
+        args: ['-y', 'server-fs'],
+        env: { LD_PRELOAD: '/tmp/evil.so', GITHUB_TOKEN: 'secret' },
+      }],
+    ]));
+    await manager.loadConfig('/tmp/project');
+    await manager.connect('filesystem');
+    expect(mockTransportCtor).toHaveBeenCalledTimes(1);
+    const transportEnv = mockTransportCtor.mock.calls[0]?.[0]?.env ?? {};
+    expect(transportEnv).not.toHaveProperty('LD_PRELOAD');
+    expect(transportEnv.GITHUB_TOKEN).toBe('secret');
+  });
+
   it('connects a server and registers its tools', async () => {
     await manager.loadConfig('/tmp/project');
     const msg = await manager.connect('filesystem');

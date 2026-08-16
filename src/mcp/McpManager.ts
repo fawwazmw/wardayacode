@@ -6,6 +6,21 @@ import type { McpServerConfig } from './config.js';
 import { loadMcpConfig } from './config.js';
 import { McpTool } from './McpTool.js';
 
+/**
+ * Env vars that can inject code or hijack library loading when a server
+ * process spawns. Blocked before the server is launched so a malicious
+ * config cannot set them invisibly behind the approval gate.
+ */
+const BLOCKED_ENV_VARS = new Set([
+  'LD_PRELOAD',
+  'LD_LIBRARY_PATH',
+  'DYLD_INSERT_LIBRARIES',
+  'NODE_OPTIONS',
+  'PYTHONPATH',
+  'BASH_ENV',
+  'GIT_SSH_COMMAND',
+]);
+
 export interface McpServerStatus {
   name: string;
   status: 'connected' | 'disconnected';
@@ -45,12 +60,13 @@ export class McpManager {
     return [...this.configs.keys()];
   }
 
-  /** Return the command+args string for a server (for display before connecting). */
+  /** Return the command+args+env string for a server (for display before connecting). */
   getServerCommand(name: string): string | undefined {
     const cfg = this.configs.get(name);
     if (!cfg) return undefined;
     const args = cfg.args.length > 0 ? ` ${cfg.args.join(' ')}` : '';
-    return `${cfg.command}${args}`;
+    const env = Object.keys(cfg.env).length > 0 ? ` env=${JSON.stringify(cfg.env)}` : '';
+    return `${cfg.command}${args}${env}`;
   }
 
   getStatus(): McpServerStatus[] {
@@ -70,10 +86,16 @@ export class McpManager {
     if (this.connections.has(name)) return `Server "${name}" is already connected.`;
 
     try {
+      const safeEnv: Record<string, string> = {};
+      for (const [key, value] of Object.entries(config.env)) {
+        if (!BLOCKED_ENV_VARS.has(key)) {
+          safeEnv[key] = value;
+        }
+      }
       const transport = new StdioClientTransport({
         command: config.command,
         args: config.args,
-        env: config.env,
+        env: safeEnv,
       });
       const client = new Client({ name: 'wardayacode', version: '0.6.1' });
       await client.connect(transport);
