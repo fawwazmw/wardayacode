@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import treeKill from 'tree-kill';
 import type { ToolRegistry } from '../tools/ToolRegistry.js';
 import type { ToolResult } from '../types.js';
 import type { McpServerConfig } from './config.js';
@@ -57,6 +58,7 @@ interface McpToolInfo {
 interface McpConnection {
   config: McpServerConfig;
   client: Client;
+  transport: StdioClientTransport;
   tools: McpToolInfo[];
 }
 
@@ -119,6 +121,14 @@ export class McpManager {
         env: safeEnv,
       });
       const client = new Client({ name: 'wardayacode', version: '0.6.1' });
+
+      // Mid-session server crash: when the child process dies, the transport
+      // fires onclose. Mark the server disconnected and drop its tools so the
+      // agent stops seeing them and /mcp status reflects reality.
+      transport.onclose = () => {
+        this.handleServerClose(name);
+      };
+
       await client.connect(transport);
 
       const { tools } = await client.listTools();
@@ -128,7 +138,7 @@ export class McpManager {
         inputSchema: t.inputSchema as Record<string, unknown>,
       }));
 
-      this.connections.set(name, { config, client, tools: toolInfos });
+      this.connections.set(name, { config, client, transport, tools: toolInfos });
 
       for (const t of toolInfos) {
         this.registry.register(new McpTool(this, name, t.name, t.description, t.inputSchema));
@@ -145,9 +155,7 @@ export class McpManager {
     const conn = this.connections.get(name);
     if (!conn) return `Server "${name}" is not connected.`;
 
-    for (const t of conn.tools) {
-      this.registry.unregister(`mcp__${name}__${t.name}`);
-    }
+    this.unregisterTools(name, conn);
 
     try {
       await conn.client.close();
@@ -162,6 +170,34 @@ export class McpManager {
     for (const name of [...this.connections.keys()]) {
       await this.disconnect(name);
     }
+  }
+
+  /**
+   * Best-effort synchronous kill of all live server processes, for use in a
+   * `process.on('exit')` handler (which cannot await). Tree-kills each server's
+   * child process so servers that ignore stdin EOF don't get orphaned.
+   */
+  killAllSync(): void {
+    for (const conn of this.connections.values()) {
+      const pid = conn.transport.pid;
+      if (pid) {
+        treeKill(pid, 'SIGTERM', () => {});
+      }
+    }
+  }
+
+  /** Shared by disconnect() and the crash handler. Idempotent. */
+  private unregisterTools(name: string, conn: McpConnection): void {
+    for (const t of conn.tools) {
+      this.registry.unregister(`mcp__${name}__${t.name}`);
+    }
+  }
+
+  private handleServerClose(name: string): void {
+    const conn = this.connections.get(name);
+    if (!conn) return;
+    this.unregisterTools(name, conn);
+    this.connections.delete(name);
   }
 
   async callTool(server: string, tool: string, args: Record<string, unknown>): Promise<ToolResult> {

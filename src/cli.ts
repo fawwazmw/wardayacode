@@ -279,6 +279,10 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
 
   logger.init(session.getId());
   process.on('exit', () => logger.close());
+  // Best-effort synchronous kill of any MCP server child processes on abrupt
+  // exit (SIGINT/SIGTERM/process.exit) — async disconnectAll runs in the TUI
+  // and plain-text teardown paths below.
+  process.on('exit', () => mcpManager.killAllSync());
 
   const currentVersion = getCurrentVersion();
 
@@ -288,7 +292,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     logger.setConsoleOutput(false);
     runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, currentVersion, initialPrompt);
   } else {
-    await runPlainText(agent, session, permissions, currentVersion, initialPrompt);
+    await runPlainText(agent, session, permissions, mcpManager, currentVersion, initialPrompt);
   }
 }
 
@@ -329,8 +333,9 @@ function runTUI(
     )
   );
 
-  waitUntilExit().then(() => {
+  waitUntilExit().then(async () => {
     disableKittyKeyboard();
+    await mcpManager.disconnectAll();
     process.exit(0);
   });
 }
@@ -339,6 +344,7 @@ async function runPlainText(
   agent: Agent,
   session: Session,
   permissions: PermissionSystem,
+  mcpManager: McpManager,
   version: string,
   initialPrompt?: string
 ): Promise<void> {
@@ -414,8 +420,11 @@ async function runPlainText(
     process.stdout.write('\n');
   } catch (error) {
     console.error(chalk.red('\nAgent error:'), error instanceof Error ? error.message : error);
+    await mcpManager.disconnectAll();
     process.exit(1);
   }
+
+  await mcpManager.disconnectAll();
 }
 
 async function loadSession(

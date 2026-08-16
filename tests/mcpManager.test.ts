@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockClientCtor, mockTransportCtor } = vi.hoisted(() => ({
+const { mockClientCtor, mockTransportCtor, mockTreeKill } = vi.hoisted(() => ({
   mockClientCtor: vi.fn(),
   mockTransportCtor: vi.fn(),
+  mockTreeKill: vi.fn(),
 }));
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
@@ -11,6 +12,7 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
 vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
   StdioClientTransport: mockTransportCtor,
 }));
+vi.mock('tree-kill', () => ({ default: mockTreeKill }));
 
 vi.mock('../src/mcp/config.js', () => ({
   loadMcpConfig: vi.fn(),
@@ -41,6 +43,15 @@ describe('McpManager', () => {
     close: ReturnType<typeof vi.fn>;
   };
 
+  interface MockTransport {
+    start: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+    pid: number | null;
+    onclose?: () => void;
+  }
+
+  let transportInstance: MockTransport;
+
   beforeEach(() => {
     vi.clearAllMocks();
     registry = new MockRegistry();
@@ -50,8 +61,9 @@ describe('McpManager', () => {
       callTool: vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'hello' }] }),
       close: vi.fn().mockResolvedValue(undefined),
     };
+    transportInstance = { start: vi.fn(), close: vi.fn(), pid: 12345 };
     mockClientCtor.mockImplementation(() => clientInstance);
-    mockTransportCtor.mockImplementation(() => ({ start: vi.fn(), close: vi.fn() }));
+    mockTransportCtor.mockImplementation(() => transportInstance);
     mockLoadMcpConfig.mockResolvedValue(new Map([
       ['filesystem', { name: 'filesystem', command: 'npx', args: ['-y', 'server-fs'], env: {} }],
     ]));
@@ -168,5 +180,48 @@ describe('McpManager', () => {
     await manager.disconnectAll();
     expect(clientInstance.close).toHaveBeenCalled();
     expect(manager.getStatus()[0]?.status).toBe('disconnected');
+  });
+
+  it('marks a crashed server disconnected and unregisters its tools', async () => {
+    await manager.loadConfig('/tmp/project');
+    await manager.connect('filesystem');
+    expect(registry.registered).toEqual(['mcp__filesystem__read']);
+    expect(manager.getStatus()[0]?.status).toBe('connected');
+
+    // Simulate the server process dying — the transport fires onclose.
+    transportInstance.onclose?.();
+
+    expect(manager.getStatus()[0]?.status).toBe('disconnected');
+    expect(manager.getStatus()[0]?.toolCount).toBe(0);
+    expect(registry.registered).toEqual([]);
+
+    // Subsequent tool calls fail cleanly.
+    const result = await manager.callTool('filesystem', 'read', {});
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not connected');
+  });
+
+  it('is idempotent when onclose fires after a manual disconnect', async () => {
+    await manager.loadConfig('/tmp/project');
+    await manager.connect('filesystem');
+    await manager.disconnect('filesystem');
+    // No crash: onclose after disconnect is a no-op (connection already gone).
+    transportInstance.onclose?.();
+    expect(manager.getStatus()[0]?.status).toBe('disconnected');
+    expect(registry.registered).toEqual([]);
+  });
+
+  it('killAllSync tree-kills live server processes without throwing', async () => {
+    mockTreeKill.mockImplementation((_pid: number, _sig: string, cb: () => void) => cb());
+    await manager.loadConfig('/tmp/project');
+    await manager.connect('filesystem');
+    expect(() => manager.killAllSync()).not.toThrow();
+    expect(mockTreeKill).toHaveBeenCalledWith(12345, 'SIGTERM', expect.any(Function));
+  });
+
+  it('killAllSync is a no-op with no connections', async () => {
+    await manager.loadConfig('/tmp/project');
+    expect(() => manager.killAllSync()).not.toThrow();
+    expect(mockTreeKill).not.toHaveBeenCalled();
   });
 });
