@@ -62,6 +62,24 @@ describe('PermissionSystem — tool name matching', () => {
     expect((await perms.check({ name: 'bash', input: {} })).allowed).toBe(true);
     expect((await perms.check({ name: 'write_file', input: {} })).allowed).toBe(true);
   });
+
+  it('denies mcp__* tools and prompts', async () => {
+    const perms = new PermissionSystem('default');
+    const prompt = vi.fn().mockResolvedValue('deny');
+    perms.setPromptHandler(prompt);
+    const result = await perms.check({ name: 'mcp__github__create_issue', input: {} });
+    expect(result.allowed).toBe(false);
+    expect(prompt).toHaveBeenCalledWith('mcp__github__create_issue', {}, expect.any(String));
+  });
+
+  it('denies mcp__* tools even in auto mode', async () => {
+    const perms = new PermissionSystem('auto');
+    const prompt = vi.fn().mockResolvedValue('deny');
+    perms.setPromptHandler(prompt);
+    const result = await perms.check({ name: 'mcp__filesystem__read', input: {} });
+    expect(result.allowed).toBe(false);
+    expect(prompt).toHaveBeenCalled();
+  });
 });
 
 describe('PermissionSystem — plan mode hard deny', () => {
