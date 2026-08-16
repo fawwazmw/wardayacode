@@ -11,6 +11,7 @@ import type { PermissionMode } from '../types.js';
 import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { UndoManager } from '../tools/UndoManager.js';
 import type { Checkpoint } from '../tools/Checkpoint.js';
+import type { McpManager } from '../mcp/McpManager.js';
 import { ContextManager } from '../context/ContextManager.js';
 import { ChatView, type ChatMessage, type ExpandedOutput } from './ChatView.js';
 import { InputBar } from './InputBar.js';
@@ -37,6 +38,7 @@ interface AppProps {
   undoManager: UndoManager;
   checkpoint: Checkpoint;
   permissions: PermissionSystem;
+  mcpManager?: McpManager;
   version: string;
   initialPrompt?: string;
 }
@@ -58,6 +60,7 @@ export function App({
   undoManager,
   checkpoint,
   permissions,
+  mcpManager,
   version,
   initialPrompt,
 }: AppProps): React.ReactElement {

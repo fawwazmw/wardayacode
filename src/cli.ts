@@ -18,6 +18,7 @@ import { logger } from './utils/logger.js';
 import { createProvider } from './providers/index.js';
 import { ToolRegistry, registerCoreTools, UndoManager } from './tools/index.js';
 import { PermissionSystem } from './permissions/PermissionSystem.js';
+import { McpManager } from './mcp/McpManager.js';
 import { HookSystem } from './extensibility/HookSystem.js';
 import { Agent } from './agent/index.js';
 import { buildSystemPrompt } from './agent/systemPrompt.js';
@@ -252,6 +253,10 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   const hooks = new HookSystem();
 
   const projectRoot = process.cwd();
+
+  const mcpManager = new McpManager(toolRegistry);
+  await mcpManager.loadConfig(projectRoot);
+
   const systemPrompt = options.systemPrompt ?? config.systemPrompt ?? await buildSystemPrompt(projectRoot);
 
   const agent = new Agent({
@@ -281,7 +286,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     // Ink owns the terminal — route logs to the file only so warn/error lines
     // don't corrupt the frame or duplicate messages the UI already shows.
     logger.setConsoleOutput(false);
-    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, currentVersion, initialPrompt);
+    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, currentVersion, initialPrompt);
   } else {
     await runPlainText(agent, session, permissions, currentVersion, initialPrompt);
   }
@@ -295,6 +300,7 @@ function runTUI(
   undoManager: UndoManager,
   checkpoint: Checkpoint,
   permissions: PermissionSystem,
+  mcpManager: McpManager,
   version: string,
   initialPrompt?: string
 ): void {
@@ -316,6 +322,7 @@ function runTUI(
         undoManager,
         checkpoint,
         permissions,
+        mcpManager,
         version,
         initialPrompt,
       })
