@@ -52,7 +52,10 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     listTasks: () => [],
     clearTasks: vi.fn().mockReturnValue('All tasks cleared.'),
     scanPlugins: () => [],
-    scanMcpConfigs: () => [],
+    mcpList: vi.fn().mockResolvedValue('Configured: filesystem'),
+    mcpConnect: vi.fn().mockResolvedValue('Connected to filesystem (1 tools).'),
+    mcpDisconnect: vi.fn().mockResolvedValue('Disconnected from filesystem.'),
+    mcpStatus: vi.fn().mockResolvedValue('  filesystem  — disconnected (0 tools)'),
     setSandboxEnabled: vi.fn(),
     getSandboxEnabled: () => false,
     askSideQuestion: vi.fn().mockResolvedValue('Side question received.'),
@@ -405,11 +408,33 @@ describe('handleSlashCommand', () => {
     expect(ctx.createBranch).toHaveBeenCalledWith('my-feature');
   });
 
-  it('handles /mcp', async () => {
+  it('handles /mcp with no args as status', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/mcp', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('MCP');
+    expect(ctx.mcpStatus).toHaveBeenCalled();
+  });
+
+  it('handles /mcp list', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/mcp list', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Configured: filesystem');
+  });
+
+  it('handles /mcp connect <name>', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/mcp connect filesystem', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.mcpConnect).toHaveBeenCalledWith('filesystem');
+    expect(result.output).toContain('Connected to filesystem');
+  });
+
+  it('handles /mcp disconnect <name>', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/mcp disconnect filesystem', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.mcpDisconnect).toHaveBeenCalledWith('filesystem');
   });
 
   it('handles /plugin', async () => {
