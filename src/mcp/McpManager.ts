@@ -10,6 +10,13 @@ import { McpTool } from './McpTool.js';
  * Env vars that can inject code or hijack library loading when a server
  * process spawns. Blocked before the server is launched so a malicious
  * config cannot set them invisibly behind the approval gate.
+ *
+ * NOTE: this is defense-in-depth, NOT a security guarantee — a denylist can
+ * never enumerate every dangerous variable. The primary security boundary is
+ * the connect approval gate (`/mcp connect`), which surfaces the exact
+ * command, args, AND full env for explicit user approval before anything is
+ * spawned. These prefixes/vars are only an extra layer that stops the most
+ * common injection vectors from even reaching the process.
  */
 const BLOCKED_ENV_PREFIXES = ['LD_', 'DYLD_'];
 const BLOCKED_ENV_VARS = new Set([
