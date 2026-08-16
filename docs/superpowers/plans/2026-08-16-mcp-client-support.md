@@ -320,6 +320,12 @@ describe('McpManager', () => {
     expect(manager.getConfigNames()).toEqual(['filesystem']);
   });
 
+  it('returns the command for a configured server', async () => {
+    await manager.loadConfig('/tmp/project');
+    expect(manager.getServerCommand('filesystem')).toBe('npx -y server-fs');
+    expect(manager.getServerCommand('unknown')).toBeUndefined();
+  });
+
   it('connects a server and registers its tools', async () => {
     await manager.loadConfig('/tmp/project');
     const msg = await manager.connect('filesystem');
@@ -484,6 +490,14 @@ export class McpManager {
 
   getConfigNames(): string[] {
     return [...this.configs.keys()];
+  }
+
+  /** Return the command+args string for a server (for display before connecting). */
+  getServerCommand(name: string): string | undefined {
+    const cfg = this.configs.get(name);
+    if (!cfg) return undefined;
+    const args = cfg.args.length > 0 ? ` ${cfg.args.join(' ')}` : '';
+    return `${cfg.command}${args}`;
   }
 
   getStatus(): McpServerStatus[] {
@@ -929,6 +943,18 @@ Modify `src/ui/App.tsx` — in the `handleSubmit` context object, replace the `s
       },
       mcpConnect: async (name: string) => {
         if (!mcpManager) return 'MCP not available in this context.';
+        const command = mcpManager.getServerCommand(name);
+        if (command === undefined) return `Unknown MCP server: ${name}`;
+        const status = mcpManager.getStatus().find(s => s.name === name);
+        if (status?.status === 'connected') return `Server "${name}" is already connected.`;
+
+        // Security gate: MCP configs (`.mcp.json` / `.wardayacode/mcp/*.json`)
+        // can come from a cloned repo, so never spawn a server process without
+        // surfacing the exact command and getting explicit approval.
+        const approved = await new Promise<boolean>(resolve => {
+          setPendingMcp({ name, command, resolve });
+        });
+        if (!approved) return 'MCP connect cancelled.';
         return mcpManager.connect(name);
       },
       mcpDisconnect: async (name: string) => {
@@ -945,6 +971,56 @@ Modify `src/ui/App.tsx` — in the `handleSubmit` context object, replace the `s
         return `MCP servers:\n${lines.join('\n')}`;
       },
 ```
+
+Then add the `pendingMcp` state and its confirmation prompt to `App.tsx`:
+
+1. Add state alongside the existing `pendingPermission` state (near the other `useState` calls):
+
+```typescript
+  const [pendingMcp, setPendingMcp] = useState<{ name: string; command: string; resolve: (ok: boolean) => void } | null>(null);
+```
+
+2. Add a handler for the confirmation decision (near `handlePermissionDecision`):
+
+```typescript
+  const handleMcpDecision = useCallback((ok: boolean) => {
+    if (pendingMcp) {
+      pendingMcp.resolve(ok);
+      setPendingMcp(null);
+    }
+  }, [pendingMcp]);
+```
+
+3. Render the confirmation prompt (near the `pendingPermission` render block):
+
+```tsx
+      {pendingMcp && (
+        <Box
+          flexDirection="column"
+          borderStyle="round"
+          borderColor={colors.accent}
+          paddingX={2}
+          paddingY={1}
+          marginX={1}
+        >
+          <Text bold>Connect to MCP server "{pendingMcp.name}"?</Text>
+          <Text color={colors.muted}>Command: {pendingMcp.command}</Text>
+          <Text color={colors.muted}>(y)es / (n)o</Text>
+        </Box>
+      )}
+```
+
+4. Add a `useInput` handler to answer the prompt (y/n), gated so it doesn't fire while `pendingMcp` is null:
+
+```typescript
+  useInput((input) => {
+    if (!pendingMcp) return;
+    if (input === 'y' || input === 'Y') handleMcpDecision(true);
+    if (input === 'n' || input === 'N') handleMcpDecision(false);
+  });
+```
+
+> The prompt colors use the same `inkColors[themeMode]` values already imported in `App.tsx` (referenced as `colors.accent` / `colors.muted` in `PermissionPrompt`). Reuse those.
 
 - [ ] **Step 4: Run test to verify it passes**
 
