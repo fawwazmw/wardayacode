@@ -718,11 +718,16 @@ export function App({
     setIsLoading(true);
     setStreamingText('');
 
-    await session.append({
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: text,
-    });
+    try {
+      await session.append({
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: text,
+      });
+    } catch {
+      // A failed disk write must not leave the UI stuck with isLoading=true.
+      addSystemMessage('Warning: failed to save this message to the session file.');
+    }
 
     const ctx = contextManagerRef.current;
     ctx.addCoreMessage('user', text);
@@ -864,6 +869,7 @@ export function App({
             messages={messages}
             streamingText={streamingText}
             themeMode={themeMode}
+            resetKey={session.getId()}
             expandedOutput={expandedOutput}
           />
         )}
