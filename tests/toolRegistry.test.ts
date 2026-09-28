@@ -123,4 +123,13 @@ describe('ToolRegistry', () => {
     await registry.execute('echo', { message: 'test' });
     expect(spy).toHaveBeenCalled();
   });
+
+  it('unregister removes a tool', () => {
+    const registry = new ToolRegistry();
+    registry.register(new EchoTool());
+    expect(registry.has('echo')).toBe(true);
+    registry.unregister('echo');
+    expect(registry.has('echo')).toBe(false);
+    expect(registry.getAvailableTools().length).toBe(0);
+  });
 });

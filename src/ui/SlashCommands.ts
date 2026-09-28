@@ -116,8 +116,14 @@ export interface SlashCommandContext {
   listTasks: () => { id: number; desc: string; status: string }[];
   /** Clear a task by id, or all tasks if no id. */
   clearTasks: (id?: number) => string;
-  /** Scan the project for MCP configs. Returns file paths relative to project root. */
-  scanMcpConfigs: () => string[];
+  /** List configured MCP servers. */
+  mcpList: () => Promise<string>;
+  /** Connect an MCP server by name. */
+  mcpConnect: (name: string) => Promise<string>;
+  /** Disconnect an MCP server by name. */
+  mcpDisconnect: (name: string) => Promise<string>;
+  /** Show MCP server connection status. */
+  mcpStatus: () => Promise<string>;
   /** Enable or disable the sandbox. */
   setSandboxEnabled: (enabled: boolean) => void;
   /** Get sandbox enabled state. */
@@ -527,11 +533,16 @@ export async function handleSlashCommand(
     }
 
     case '/mcp': {
-      const configs = ctx.scanMcpConfigs();
-      if (configs.length === 0) {
-        return { handled: true, output: 'No MCP server configs found.\nMCP (Model Context Protocol) servers extend WardayaCode with external tools.\nAdd configs to .wardayacode/mcp/.' };
+      if (arg === 'list') {
+        return { handled: true, output: await ctx.mcpList() };
       }
-      return { handled: true, output: `MCP server configs:\n  ${configs.join('\n  ')}` };
+      if (arg === 'connect' && parts[2]) {
+        return { handled: true, output: await ctx.mcpConnect(parts[2]!) };
+      }
+      if (arg === 'disconnect' && parts[2]) {
+        return { handled: true, output: await ctx.mcpDisconnect(parts[2]!) };
+      }
+      return { handled: true, output: await ctx.mcpStatus() };
     }
 
     case '/review':
