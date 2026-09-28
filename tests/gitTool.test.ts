@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GitTool } from '../src/tools/GitTool.js';
+import { GitTool, tokenizeGitArgs } from '../src/tools/GitTool.js';
 
 vi.mock('node:child_process', () => {
   const mockSpawn = vi.fn();
@@ -29,6 +29,24 @@ function mockGitProcess(stdout: string, stderr: string, code: number) {
 
   (spawn as ReturnType<typeof vi.fn>).mockReturnValue(proc);
 }
+
+describe('tokenizeGitArgs', () => {
+  it('splits plain arguments', () => {
+    expect(tokenizeGitArgs('log --oneline -10')).toEqual(['log', '--oneline', '-10']);
+  });
+
+  it('strips double quotes from a value', () => {
+    expect(tokenizeGitArgs('commit -m "feat: add login"')).toEqual(['commit', '-m', 'feat: add login']);
+  });
+
+  it('strips single quotes from a value', () => {
+    expect(tokenizeGitArgs("commit -m 'fix: typo'")).toEqual(['commit', '-m', 'fix: typo']);
+  });
+
+  it('unescapes quotes inside a value', () => {
+    expect(tokenizeGitArgs('commit -m "say \\"hi\\""')).toEqual(['commit', '-m', 'say "hi"']);
+  });
+});
 
 describe('GitTool', () => {
   let tool: GitTool;
@@ -104,6 +122,17 @@ describe('GitTool', () => {
     const result = await tool.execute({ args: 'commit -m "feat: add login"' });
     expect(result.success).toBe(true);
     expect(result.content).toContain('feat: add login');
+  });
+
+  it('passes unquoted argv and a non-interactive env to git', async () => {
+    mockGitProcess('ok', '', 0);
+    await tool.execute({ args: 'commit -m "feat: add login"' });
+    const spawnMock = spawn as unknown as ReturnType<typeof vi.fn>;
+    const [, argv, options] = spawnMock.mock.calls[0]!;
+    expect(argv).toEqual(['commit', '-m', 'feat: add login']);
+    expect(options.env.GIT_TERMINAL_PROMPT).toBe('0');
+    expect(options.env.GIT_PAGER).toBe('cat');
+    expect(options.env.GIT_EDITOR).toBe('true');
   });
 
   it('returns error on non-zero exit', async () => {

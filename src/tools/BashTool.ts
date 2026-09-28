@@ -13,13 +13,13 @@ const DESTRUCTIVE_PATTERNS = [
   /\brm\s+-[a-zA-Z]*f[a-zA-Z]*r\b/,
   /\bdd\b.*\bof=/,
   /\bmkfs\b/,
-  /\bformat\b/,
+  /\bformat\s+[a-zA-Z]:/i,  // Windows disk format, e.g. `format C:` (not the word "format")
   />\s*\/dev\/(sd|hd|nvme)/,
   /\bsudo\s+rm\b/,
   /\bchmod\s+-R\s+777\b/,
 ];
 
-function isDestructive(command: string): string | null {
+export function isDestructive(command: string): string | null {
   for (const pattern of DESTRUCTIVE_PATTERNS) {
     if (pattern.test(command)) {
       return pattern.toString();
