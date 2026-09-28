@@ -247,20 +247,22 @@ src/
 
 ## Keyboard Shortcuts
 
-| Key           | Action                        |
-| ------------- | ----------------------------- |
-| `!`           | Bash mode                     |
-| `/`           | Commands palette              |
-| `Tab`         | Auto-complete command         |
-| `Esc`         | Clear input / interrupt agent |
-| `Ctrl+O`      | Toggle verbose output         |
-| `Ctrl+T`      | Toggle task list              |
-| `Ctrl+Z`      | Suspend                       |
-| `Ctrl+V`      | Paste images                  |
-| `Alt+P`       | Switch model                  |
-| `Ctrl+S`      | Stash prompt                  |
-| `Ctrl+G`      | Edit in `$EDITOR`             |
-| `\` + `Enter` | Multi-line input              |
+| Key           | Action                          |
+| ------------- | ------------------------------- |
+| `/`           | Open command palette            |
+| `Tab`         | Auto-complete command           |
+| `Enter`       | Submit prompt                   |
+| `Shift+Enter` | Insert newline (multi-line)     |
+| `Esc`         | Clear input / interrupt agent   |
+| `Ctrl+C`      | Interrupt / clear input / exit  |
+| `Ctrl+D`      | Exit                            |
+| `Ctrl+O`      | Toggle verbose tool output      |
+| `↑` / `↓`     | Prompt history                  |
+| `Ctrl+A/E`    | Jump to line start / end        |
+| `Ctrl+U/K/W`  | Delete to start / end / word    |
+
+> `!`, `@`, `&` prefix modes and the `Alt`/`Ctrl+T` shortcuts shown in some
+> agent CLIs are **not** implemented here.
 
 ---
 

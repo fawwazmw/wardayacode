@@ -25,9 +25,9 @@ describe('HelpDialog', () => {
     expect(out).toContain('Commands');
     expect(out).toContain('Custom Commands');
     // Shortcut keys from each of the three columns render.
-    expect(out).toContain('for bash mode');
-    expect(out).toContain('double tap esc');
-    expect(out).toContain('ctrl + shift + -');
+    expect(out).toContain('for commands');
+    expect(out).toContain('to submit');
+    expect(out).toContain('ctrl + c');
   });
 
   it('Right arrow advances to the Commands section showing the first page of commands', async () => {

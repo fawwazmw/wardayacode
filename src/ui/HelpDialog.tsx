@@ -77,27 +77,19 @@ const HELP_COMMANDS: HelpCommand[] = [
 // the layout the user laid out.
 const SHORTCUT_GROUPS: Shortcut[][] = [
   [
-    { key: '!', desc: 'for bash mode' },
     { key: '/', desc: 'for commands' },
-    { key: '@', desc: 'for file paths' },
-    { key: '&', desc: 'for background' },
-    { key: '/anw', desc: 'for side question' },
+    { key: 'tab', desc: 'to autocomplete' },
+    { key: '↑ / ↓', desc: 'for history' },
   ],
   [
-    { key: 'double tap esc', desc: 'to clear input' },
-    { key: 'shift + tab', desc: 'to auto-accept edits' },
+    { key: 'enter', desc: 'to submit' },
+    { key: 'shift + enter', desc: 'for new line' },
+    { key: 'esc', desc: 'to clear / interrupt' },
+  ],
+  [
+    { key: 'ctrl + c', desc: 'to interrupt / clear / exit' },
+    { key: 'ctrl + d', desc: 'to exit' },
     { key: 'ctrl + o', desc: 'for verbose output' },
-    { key: 'ctrl + t', desc: 'to toggle tasks' },
-    { key: '\\ + return', desc: 'for new line' },
-  ],
-  [
-    { key: 'ctrl + shift + -', desc: 'to undo' },
-    { key: 'ctrl + z', desc: 'to suspend' },
-    { key: 'ctrl + v', desc: 'to paste images' },
-    { key: 'alt + p', desc: 'to switch model' },
-    { key: 'ctrl + s', desc: 'to stash prompt' },
-    { key: 'ctrl + g', desc: 'to edit in $EDITOR' },
-    { key: '/keybindings', desc: 'to customize' },
   ],
 ];
 
