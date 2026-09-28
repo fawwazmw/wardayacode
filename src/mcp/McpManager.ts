@@ -108,6 +108,8 @@ export class McpManager {
     if (!config) return `Unknown MCP server: ${name}`;
     if (this.connections.has(name)) return `Server "${name}" is already connected.`;
 
+    let transport: StdioClientTransport | undefined;
+
     try {
       const safeEnv: Record<string, string> = {};
       for (const [key, value] of Object.entries(config.env)) {
@@ -115,7 +117,7 @@ export class McpManager {
           safeEnv[key] = value;
         }
       }
-      const transport = new StdioClientTransport({
+      transport = new StdioClientTransport({
         command: config.command,
         args: config.args,
         env: safeEnv,
@@ -146,6 +148,14 @@ export class McpManager {
 
       return `Connected to ${name} (${toolInfos.length} tools).`;
     } catch (error) {
+      // Tear down the spawned child process so a failed connect doesn't leak it.
+      if (transport) {
+        try {
+          await transport.close();
+        } catch {
+          // transport may never have started; ignore
+        }
+      }
       this.connections.delete(name);
       return `Failed to connect to ${name}: ${error instanceof Error ? error.message : String(error)}`;
     }

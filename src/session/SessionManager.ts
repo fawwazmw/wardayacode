@@ -1,4 +1,6 @@
 import fs from 'fs/promises';
+import { createReadStream } from 'fs';
+import { createInterface } from 'node:readline';
 import path from 'path';
 
 export interface SessionListEntry {
@@ -7,6 +9,32 @@ export interface SessionListEntry {
   messageCount: number;
   sizeBytes: number;
   firstMessage?: string;
+}
+
+/**
+ * Count non-empty lines and capture the first one without loading the whole
+ * session file into memory (sessions can grow large).
+ */
+async function scanSessionFile(filePath: string): Promise<{ messageCount: number; firstLine: string | null }> {
+  const rl = createInterface({
+    input: createReadStream(filePath),
+    crlfDelay: Infinity,
+  });
+
+  let messageCount = 0;
+  let firstLine: string | null = null;
+
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      if (firstLine === null) firstLine = line;
+      messageCount++;
+    }
+  } finally {
+    rl.close();
+  }
+
+  return { messageCount, firstLine };
 }
 
 export class SessionManager {
@@ -27,13 +55,12 @@ export class SessionManager {
         const filePath = path.join(this.sessionDir, file);
         try {
           const stat = await fs.stat(filePath);
-          const content = await fs.readFile(filePath, 'utf-8');
-          const lines = content.split('\n').filter(l => l.trim());
+          const { messageCount, firstLine } = await scanSessionFile(filePath);
 
           let firstMessage: string | undefined;
-          if (lines.length > 0) {
+          if (firstLine) {
             try {
-              const parsed = JSON.parse(lines[0]!) as { content?: string; role?: string };
+              const parsed = JSON.parse(firstLine) as { content?: string; role?: string };
               if (parsed.role === 'user' && parsed.content) {
                 firstMessage = parsed.content.slice(0, 80);
               }
@@ -45,7 +72,7 @@ export class SessionManager {
           sessions.push({
             id: file.replace('.jsonl', ''),
             createdAt: stat.birthtime,
-            messageCount: lines.length,
+            messageCount,
             sizeBytes: stat.size,
             firstMessage,
           });

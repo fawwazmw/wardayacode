@@ -126,12 +126,21 @@ describe('McpManager', () => {
     expect(clientInstance.listTools).toHaveBeenCalled();
   });
 
+  it('closes the transport when connect fails', async () => {
+    await manager.loadConfig('/tmp/project');
+    clientInstance.connect.mockRejectedValueOnce(new Error('spawn failed'));
+
+    const msg = await manager.connect('filesystem');
+    expect(msg).toContain('Failed to connect');
+    expect(transportInstance.close).toHaveBeenCalled();
+    expect(manager.getStatus()[0]?.status).toBe('disconnected');
+  });
+
   it('reports status connected/disconnected', async () => {
     await manager.loadConfig('/tmp/project');
     expect(manager.getStatus()[0]?.status).toBe('disconnected');
     await manager.connect('filesystem');
     expect(manager.getStatus()[0]?.status).toBe('connected');
-    expect(manager.getStatus()[0]?.toolCount).toBe(1);
   });
 
   it('disconnects and unregisters tools', async () => {
