@@ -34,8 +34,20 @@ export class Checkpoint {
     if (this.stashCount === 0) return false;
 
     try {
-      await this.runGit(['stash', 'pop']);
-      this.stashCount--;
+      // Pop the most recent stash that WE created rather than the top of the
+      // stack: the user may have stashed their own work after the checkpoint,
+      // and a blind `stash pop` would restore the wrong one.
+      const list = await this.runGit(['stash', 'list', '--format=%gd %s']);
+      const lines = list.split('\n').filter(l => l.trim().length > 0);
+      const index = lines.findIndex(l => l.includes('wardayacode:'));
+
+      if (index === -1) {
+        this.stashCount = 0;
+        return false;
+      }
+
+      await this.runGit(['stash', 'pop', `stash@{${index}}`]);
+      this.stashCount = Math.max(0, this.stashCount - 1);
       return true;
     } catch {
       return false;
