@@ -62,6 +62,9 @@ export class PermissionSystem {
         this.rules = [{ tool: '*', action: 'allow' }];
         break;
     }
+
+    // MCP tools always require permission, in every mode
+    this.rules.unshift({ tool: 'mcp__*', action: 'deny', reason: 'MCP tools require approval' });
   }
 
   async check(toolUse: ToolUse): Promise<PermissionResult> {
@@ -105,8 +108,14 @@ export class PermissionSystem {
   }
 
   private matchesRule(toolUse: ToolUse, rule: PermissionRule): boolean {
-    if (rule.tool !== '*' && rule.tool !== toolUse.name) {
-      return false;
+    if (rule.tool !== '*') {
+      if (rule.tool.includes('*')) {
+        if (!minimatch(toolUse.name, rule.tool)) {
+          return false;
+        }
+      } else if (rule.tool !== toolUse.name) {
+        return false;
+      }
     }
 
     if (rule.pattern && toolUse.input?.path) {

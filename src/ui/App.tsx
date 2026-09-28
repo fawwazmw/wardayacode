@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Box, useApp, useInput } from 'ink';
+import { Box, Text, useApp, useInput } from 'ink';
 import fs from 'fs/promises';
 import { existsSync, readdirSync } from 'fs';
 import path from 'path';
@@ -11,11 +11,13 @@ import type { PermissionMode } from '../types.js';
 import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { UndoManager } from '../tools/UndoManager.js';
 import type { Checkpoint } from '../tools/Checkpoint.js';
+import type { McpManager } from '../mcp/McpManager.js';
 import { ContextManager } from '../context/ContextManager.js';
 import { ChatView, type ChatMessage, type ExpandedOutput } from './ChatView.js';
 import { InputBar } from './InputBar.js';
 import { StatusBar } from './StatusBar.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
+import { inkColors } from './theme.js';
 import { handleSlashCommand } from './SlashCommands.js';
 import { HelpDialog } from './HelpDialog.js';
 import { WelcomeScreen } from './components/WelcomeScreen.js';
@@ -37,6 +39,7 @@ interface AppProps {
   undoManager: UndoManager;
   checkpoint: Checkpoint;
   permissions: PermissionSystem;
+  mcpManager?: McpManager;
   version: string;
   initialPrompt?: string;
 }
@@ -58,6 +61,7 @@ export function App({
   undoManager,
   checkpoint,
   permissions,
+  mcpManager,
   version,
   initialPrompt,
 }: AppProps): React.ReactElement {
@@ -78,6 +82,7 @@ export function App({
   const [effortLevel, setEffortLevel] = useState('medium');
   const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
+  const [pendingMcp, setPendingMcp] = useState<{ name: string; command: string; resolve: (ok: boolean) => void } | null>(null);
   const [sandboxEnabled, setSandboxEnabled] = useState(false);
   const sandboxRef = useRef(sandboxEnabled);
   sandboxRef.current = sandboxEnabled;
@@ -137,6 +142,14 @@ export function App({
     }
   });
 
+  // Answers the MCP connect confirmation prompt. Gated on pendingMcp so it
+  // never swallows typing while no confirmation is active.
+  useInput((input) => {
+    if (!pendingMcp) return;
+    if (input === 'y' || input === 'Y') handleMcpDecision(true);
+    if (input === 'n' || input === 'N') handleMcpDecision(false);
+  });
+
   const addSystemMessage = useCallback((content: string) => {
     setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: `ℹ ${content}` }]);
   }, []);
@@ -170,10 +183,22 @@ export function App({
     }
   }, [pendingPermission]);
 
+  const handleMcpDecision = useCallback((ok: boolean) => {
+    if (pendingMcp) {
+      pendingMcp.resolve(ok);
+      setPendingMcp(null);
+    }
+  }, [pendingMcp]);
+
   const handleInterrupt = useCallback(() => {
     if (pendingPermission) {
       pendingPermission.resolve('deny');
       setPendingPermission(null);
+      return;
+    }
+    if (pendingMcp) {
+      pendingMcp.resolve(false);
+      setPendingMcp(null);
       return;
     }
     if (abortRef.current) {
@@ -183,7 +208,7 @@ export function App({
       setStreamingText('');
       addSystemMessage('Operation cancelled.');
     }
-  }, [addSystemMessage, pendingPermission]);
+  }, [addSystemMessage, pendingPermission, pendingMcp]);
 
   const handleSubmit = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -427,15 +452,42 @@ export function App({
           return [];
         }
       },
-      scanMcpConfigs: () => {
-        try {
-          const mcpDir = path.join(process.cwd(), '.wardayacode', 'mcp');
-          if (!existsSync(mcpDir)) return [];
-          const files = readdirSync(mcpDir).filter(f => f.endsWith('.json'));
-          return files.map(f => path.join('.wardayacode', 'mcp', f));
-        } catch {
-          return [];
+      mcpList: async () => {
+        if (!mcpManager) return 'MCP not available in this context.';
+        const names = mcpManager.getConfigNames();
+        if (names.length === 0) {
+          return 'No MCP servers configured.\nAdd .mcp.json or .wardayacode/mcp/*.json.';
         }
+        return `Configured MCP servers:\n  ${names.join('\n  ')}\nUse /mcp connect <name> to connect.`;
+      },
+      mcpConnect: async (name: string) => {
+        if (!mcpManager) return 'MCP not available in this context.';
+        const command = mcpManager.getServerCommand(name);
+        if (command === undefined) return `Unknown MCP server: ${name}`;
+        const status = mcpManager.getStatus().find(s => s.name === name);
+        if (status?.status === 'connected') return `Server "${name}" is already connected.`;
+
+        // Security gate: MCP configs (`.mcp.json` / `.wardayacode/mcp/*.json`)
+        // can come from a cloned repo, so never spawn a server process without
+        // surfacing the exact command and getting explicit approval.
+        const approved = await new Promise<boolean>(resolve => {
+          setPendingMcp({ name, command, resolve });
+        });
+        if (!approved) return 'MCP connect cancelled.';
+        return mcpManager.connect(name);
+      },
+      mcpDisconnect: async (name: string) => {
+        if (!mcpManager) return 'MCP not available in this context.';
+        return mcpManager.disconnect(name);
+      },
+      mcpStatus: async () => {
+        if (!mcpManager) return 'MCP not available in this context.';
+        const statuses = mcpManager.getStatus();
+        if (statuses.length === 0) return 'No MCP servers configured.';
+        const lines = statuses.map(s =>
+          `  ${s.name.padEnd(20)} ${s.status === 'connected' ? '✓ connected' : '— disconnected'} (${s.toolCount} tools)`,
+        );
+        return `MCP servers:\n${lines.join('\n')}`;
       },
       getSandboxStatus: () => {
         return `Sandbox: ${sandboxEnabled ? 'enabled' : 'disabled'}\nSandbox denies bash/git/write tools. Enable with /sandbox enable.`;
@@ -757,7 +809,7 @@ export function App({
       abortRef.current = null;
       setIsLoading(false);
     }
-  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions, setExpanded]);
+  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions, mcpManager, setExpanded]);
 
   React.useEffect(() => {
     if (initialPrompt) {
@@ -766,6 +818,7 @@ export function App({
   }, []);
 
   const showWelcome = messages.length === 0 && !streamingText && !isLoading;
+  const colors = inkColors[themeMode];
 
   return (
     <Box flexDirection="column" minHeight="100%">
@@ -800,6 +853,21 @@ export function App({
           />
         )}
 
+        {pendingMcp && (
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor={colors.accent}
+            paddingX={2}
+            paddingY={1}
+            marginX={1}
+          >
+            <Text bold>Connect to MCP server "{pendingMcp.name}"?</Text>
+            <Text color={colors.muted}>Command: {pendingMcp.command}</Text>
+            <Text color={colors.muted}>(y)es / (n)o</Text>
+          </Box>
+        )}
+
         {showHelp && (
           <HelpDialog themeMode={themeMode} onClose={() => setShowHelp(false)} />
         )}
@@ -807,7 +875,7 @@ export function App({
 
       <InputBar
         onSubmit={handleSubmit}
-        isLoading={isLoading || !!pendingPermission}
+        isLoading={isLoading || !!pendingPermission || !!pendingMcp}
         inputDisabled={showHelp}
         themeMode={themeMode}
         onInterrupt={handleInterrupt}
