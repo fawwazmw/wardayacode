@@ -42,8 +42,8 @@ describe('HelpDialog', () => {
     await tickMs();
     const out = lastFrame() ?? '';
     // First command in the catalog is visible; a later one is scrolled off.
-    expect(out).toContain('/add-dir');
-    expect(out).toContain('Add a new working directory');
+    expect(out).toContain('/agents');
+    expect(out).toContain('Manage agent configurations');
     expect(out).not.toContain('/theme');
     // Position indicator shows a 7-row window.
     expect(out).toContain('1–7 of');
@@ -74,7 +74,7 @@ describe('HelpDialog', () => {
     await tickMs();
     const out = lastFrame() ?? '';
     // Scrolled one row: the first command is gone, the window shifts down.
-    expect(out).not.toContain('/add-dir');
+    expect(out).not.toContain('/agents');
     expect(out).toContain('2–8 of');
   });
 

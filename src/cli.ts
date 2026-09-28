@@ -299,7 +299,14 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
 function runTUI(
   agent: Agent,
   session: Session,
-  config: { model: string; permissionMode: PermissionMode; theme: 'dark' | 'light' },
+  config: {
+    model: string;
+    permissionMode: PermissionMode;
+    theme: 'dark' | 'light';
+    maxTokens: number;
+    temperature: number;
+    maxRetries: number;
+  },
   languageModel: LanguageModel,
   undoManager: UndoManager,
   checkpoint: Checkpoint,
@@ -328,6 +335,11 @@ function runTUI(
         permissions,
         mcpManager,
         version,
+        maxTokens: config.maxTokens,
+        temperature: config.temperature,
+        maxRetries: config.maxRetries,
+        // Agent uses its default maxSteps here; cli.ts never overrides it.
+        maxSteps: 25,
         initialPrompt,
       })
     )

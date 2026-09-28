@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import fs from 'fs/promises';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync } from 'fs';
 import path from 'path';
 import { streamText, type LanguageModel } from 'ai';
 import type { Agent } from '../agent/index.js';
@@ -41,6 +41,10 @@ interface AppProps {
   permissions: PermissionSystem;
   mcpManager?: McpManager;
   version: string;
+  maxTokens: number;
+  temperature: number;
+  maxRetries: number;
+  maxSteps: number;
   initialPrompt?: string;
 }
 
@@ -53,7 +57,7 @@ interface PendingPermission {
 
 export function App({
   agent,
-  session,
+  session: initialSession,
   model,
   languageModel,
   permissionMode: initialPermissionMode,
@@ -63,9 +67,16 @@ export function App({
   permissions,
   mcpManager,
   version,
+  maxTokens,
+  temperature,
+  maxRetries,
+  maxSteps,
   initialPrompt,
 }: AppProps): React.ReactElement {
   const { exit } = useApp();
+  // The active session can be swapped at runtime by /resume, so it lives in
+  // state rather than being read straight from props.
+  const [session, setSession] = useState<Session>(initialSession);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streamingText, setStreamingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -77,10 +88,7 @@ export function App({
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [themeMode, setThemeMode] = useState(initialThemeMode);
   const [sessionName, setSessionName] = useState('');
-  const [fastMode, setFastMode] = useState(false);
-  const [colorValue, setColorValue] = useState('accent');
   const [effortLevel, setEffortLevel] = useState('medium');
-  const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const [pendingMcp, setPendingMcp] = useState<{ name: string; command: string; resolve: (ok: boolean) => void } | null>(null);
   const [sandboxEnabled, setSandboxEnabled] = useState(false);
@@ -90,14 +98,8 @@ export function App({
   const taskIdCounter = useRef(0);
   const sessionNameRef = useRef(sessionName);
   sessionNameRef.current = sessionName;
-  const fastModeRef = useRef(fastMode);
-  fastModeRef.current = fastMode;
-  const colorValueRef = useRef(colorValue);
-  colorValueRef.current = colorValue;
   const effortLevelRef = useRef(effortLevel);
   effortLevelRef.current = effortLevel;
-  const directoriesRef = useRef(directories);
-  directoriesRef.current = directories;
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
   const sandboxEnabledRef = useRef(sandboxEnabled);
@@ -323,12 +325,33 @@ export function App({
         const loaded = new SessionClass(match.id, process.cwd(), currentPermissionMode);
         await loaded.load();
         const msgs = loaded.getMessages();
+
+        // Rebuild the live context so the agent actually carries the resumed
+        // history into the next turn — previously this was display-only and the
+        // next prompt was sent with no prior turns.
+        const ctx = contextManagerRef.current;
+        ctx.clear();
+        for (const m of msgs) {
+          if (m.role === 'user' || m.role === 'assistant') {
+            ctx.addMessage({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              timestamp: m.timestamp,
+            });
+          }
+        }
+
+        // Swap the active session so subsequent appends land in the resumed
+        // transcript rather than the session that was open at startup.
+        setSession(loaded);
         setMessages(msgs.map(m => ({
           type: 'text' as const,
           role: m.role as 'user' | 'assistant',
           content: m.content,
         })));
         setTokenUsage({ input: 0, output: 0 });
+        sessionStartRef.current = Date.now();
         return `Resumed session ${match.id.slice(0, 8)} (${msgs.length} messages)`;
       },
       initWardayaDoc: async () => {
@@ -392,10 +415,6 @@ export function App({
         await fs.writeFile(filepath, content, 'utf-8');
         return `WARDAYA.md created in ${cwd}`;
       },
-      getFastMode: () => fastModeRef.current,
-      setFastMode: (fast) => setFastMode(fast),
-      getColor: () => colorValueRef.current,
-      setColor: (color) => setColorValue(color),
       getEffort: () => effortLevelRef.current,
       setEffort: (level) => {
         setEffortLevel(level);
@@ -409,11 +428,12 @@ export function App({
       getAgentConfigSummary: () => {
         return [
           `Model:        ${model}`,
-          `Max tokens:   4096`,
-          `Temperature:  0`,
-          `Max steps:    25`,
-          `Max retries:  3`,
-          `Fast mode:    ${fastMode ? 'on' : 'off'}`,
+          `Permission:   ${currentPermissionMode}`,
+          `Effort:       ${effortLevelRef.current}`,
+          `Max tokens:   ${maxTokens}`,
+          `Temperature:  ${temperature}`,
+          `Max steps:    ${maxSteps}`,
+          `Max retries:  ${maxRetries}`,
         ].join('\n');
       },
       createBranch: async (name: string) => {
@@ -433,23 +453,6 @@ export function App({
           return `Branch created: ${name}. Switched to new branch.`;
         } catch {
           return `Failed to create branch: ${name}.`;
-        }
-      },
-      listPlugins: () => {
-        // Check for plugins directory
-        return [];
-      },
-      reloadPlugins: async () => {
-        return 'Plugins reloaded.';
-      },
-      scanPlugins: () => {
-        try {
-          const pluginDir = path.join(process.cwd(), '.wardayacode', 'plugins');
-          if (!existsSync(pluginDir)) return [];
-          const files = readdirSync(pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.mjs'));
-          return files.map(f => path.join('.wardayacode', 'plugins', f));
-        } catch {
-          return [];
         }
       },
       mcpList: async () => {
@@ -489,9 +492,6 @@ export function App({
         );
         return `MCP servers:\n${lines.join('\n')}`;
       },
-      getSandboxStatus: () => {
-        return `Sandbox: ${sandboxEnabled ? 'enabled' : 'disabled'}\nSandbox denies bash/git/write tools. Enable with /sandbox enable.`;
-      },
       getSandboxEnabled: () => sandboxRef.current,
       setSandboxEnabled: (enabled: boolean) => {
         setSandboxEnabled(enabled);
@@ -524,11 +524,6 @@ export function App({
         }
         output.push(`\nFull diff: ${lines.length} lines`);
         return output.join('\n');
-      },
-      getDirectories: () => directoriesRef.current,
-      addDirectory: (dir: string) => {
-        setDirectories(prev => prev.includes(dir) ? prev : [...prev, dir]);
-        return `Added directory: ${dir}`;
       },
       copyLastResponse: async () => {
         const msgs = messagesRef.current;
