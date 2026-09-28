@@ -54,6 +54,8 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     mcpConnect: vi.fn().mockResolvedValue('Connected to filesystem (1 tools).'),
     mcpDisconnect: vi.fn().mockResolvedValue('Disconnected from filesystem.'),
     mcpStatus: vi.fn().mockResolvedValue('  filesystem  — disconnected (0 tools)'),
+    getHooksInfo: vi.fn().mockResolvedValue('Hooks:\n  preToolUse  active  user  guard.sh'),
+    trustHooks: vi.fn().mockResolvedValue('Project hooks trusted. 1 hook(s) active.'),
     setSandboxEnabled: vi.fn(),
     getSandboxEnabled: () => false,
     askSideQuestion: vi.fn().mockResolvedValue('Side question received.'),

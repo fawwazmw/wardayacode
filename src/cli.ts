@@ -20,6 +20,7 @@ import { ToolRegistry, registerCoreTools, UndoManager } from './tools/index.js';
 import { PermissionSystem } from './permissions/PermissionSystem.js';
 import { McpManager } from './mcp/McpManager.js';
 import { HookSystem } from './extensibility/HookSystem.js';
+import { HookRuntime } from './extensibility/hookLoader.js';
 import { SkillSystem } from './extensibility/SkillSystem.js';
 import { loadSkills } from './extensibility/skillLoader.js';
 import { Agent } from './agent/index.js';
@@ -256,6 +257,11 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
 
   const projectRoot = process.cwd();
 
+  // Discover and register hook scripts. Project hooks stay inactive until the
+  // project is explicitly trusted via `/hooks trust`.
+  const hookRuntime = new HookRuntime(hooks, projectRoot);
+  await hookRuntime.activate();
+
   // Load user-defined skills and expose them to the agent via the system prompt.
   const skillSystem = new SkillSystem();
   for (const skill of await loadSkills(projectRoot)) {
@@ -298,7 +304,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     // Ink owns the terminal — route logs to the file only so warn/error lines
     // don't corrupt the frame or duplicate messages the UI already shows.
     logger.setConsoleOutput(false);
-    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, currentVersion, initialPrompt);
+    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, hookRuntime, currentVersion, initialPrompt);
   } else {
     await runPlainText(agent, session, permissions, mcpManager, currentVersion, initialPrompt);
   }
@@ -313,6 +319,7 @@ function runTUI(
   checkpoint: Checkpoint,
   permissions: PermissionSystem,
   mcpManager: McpManager,
+  hookRuntime: HookRuntime,
   version: string,
   initialPrompt?: string
 ): void {
@@ -335,6 +342,11 @@ function runTUI(
         checkpoint,
         permissions,
         mcpManager,
+        hooksInfo: () => hookRuntime.status(),
+        trustHooks: async () => {
+          await hookRuntime.trustProject();
+          return `Project hooks trusted. ${hookRuntime.getScripts().filter(s => s.trusted).length} hook(s) active.`;
+        },
         version,
         initialPrompt,
       })

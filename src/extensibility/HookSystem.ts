@@ -86,4 +86,11 @@ export class HookSystem {
       }
     }
   }
+
+  /**
+   * Remove all registered hooks.
+   */
+  clear(): void {
+    this.hooks.clear();
+  }
 }

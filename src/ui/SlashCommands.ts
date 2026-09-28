@@ -128,6 +128,10 @@ export interface SlashCommandContext {
   mcpDisconnect: (name: string) => Promise<string>;
   /** Show MCP server connection status. */
   mcpStatus: () => Promise<string>;
+  /** Human-readable hook status. */
+  getHooksInfo: () => Promise<string>;
+  /** Trust the current project's hooks and activate them. */
+  trustHooks: () => Promise<string>;
   /** Enable or disable the sandbox. */
   setSandboxEnabled: (enabled: boolean) => void;
   /** Get sandbox enabled state. */
@@ -348,25 +352,10 @@ export async function handleSlashCommand(
       return { handled: true, output: await ctx.openUrl('https://github.com/fawwazmw/wardayacode/issues/new/choose') };
 
     case '/hooks': {
-      const { existsSync, readdirSync } = await import('fs');
-      const { join } = await import('path');
-      const { homedir } = await import('os');
-      const hookDirs = [
-        join(ctx.getProjectRoot(), '.wardayacode', 'hooks'),
-        join(homedir(), '.config', 'wardayacode', 'hooks'),
-      ];
-      const hooks: string[] = [];
-      for (const dir of hookDirs) {
-        if (existsSync(dir)) {
-          for (const f of readdirSync(dir).filter(f => f.endsWith('.sh'))) {
-            hooks.push(f);
-          }
-        }
+      if (arg === 'trust') {
+        return { handled: true, output: await ctx.trustHooks() };
       }
-      if (hooks.length === 0) {
-        return { handled: true, output: 'No hook scripts found.\nHooks are shell commands that run on tool events.\nAdd .sh files to .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.' };
-      }
-      return { handled: true, output: `Hook scripts:\n  ${hooks.join('\n  ')}` };
+      return { handled: true, output: await ctx.getHooksInfo() };
     }
 
     case '/memory': {

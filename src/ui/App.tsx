@@ -41,6 +41,10 @@ interface AppProps {
   permissions: PermissionSystem;
   mcpManager?: McpManager;
   version: string;
+  /** Human-readable hook status for /hooks. */
+  hooksInfo: () => Promise<string>;
+  /** Trust the current project's hooks and activate them. */
+  trustHooks: () => Promise<string>;
   initialPrompt?: string;
 }
 
@@ -63,6 +67,8 @@ export function App({
   permissions,
   mcpManager,
   version,
+  hooksInfo,
+  trustHooks,
   initialPrompt,
 }: AppProps): React.ReactElement {
   const { exit } = useApp();
@@ -485,6 +491,8 @@ export function App({
         );
         return `MCP servers:\n${lines.join('\n')}`;
       },
+      getHooksInfo: () => hooksInfo(),
+      trustHooks: () => trustHooks(),
       getSandboxStatus: () => {
         return `Sandbox: ${sandboxEnabled ? 'enabled' : 'disabled'}\nSandbox denies bash/git/write tools. Enable with /sandbox enable.`;
       },
