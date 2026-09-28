@@ -18,10 +18,8 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/init', description: 'Initialize a new WARDAYA.md file with codebase documentation' },
   { name: '/plan', description: 'Switch to plan mode (read-only, no destructive actions)' },
   { name: '/stats', description: 'Show usage statistics and activity for this session' },
-  { name: '/fast', description: 'Toggle fast mode for faster model responses' },
   { name: '/config', description: 'Show current configuration summary' },
   { name: '/keybindings', description: 'Open or create your keybindings configuration file' },
-  { name: '/color', description: 'Set the prompt bar color for this session', args: '<color>' },
   { name: '/skills', description: 'List available skills' },
   { name: '/copy', description: "Copy the last response to clipboard", args: '[N]' },
   { name: '/feedback', description: 'Submit feedback about WardayaCode' },
@@ -32,13 +30,10 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/tui', description: 'Set the terminal UI renderer (default only)', args: '<mode>' },
   { name: '/stickers', description: 'Get link to order WardayaCode stickers' },
   { name: '/permissions', description: 'Manage allow & deny tool permission rules' },
-  { name: '/add-dir', description: 'Add a new working directory' },
   { name: '/doctor', description: 'Diagnose and verify your WardayaCode installation and settings' },
   { name: '/agents', description: 'Manage agent configurations' },
   { name: '/branch', description: 'Create a branch of the current conversation at this point', args: '<name>' },
   { name: '/mcp', description: 'Manage MCP servers' },
-  { name: '/plugin', description: 'Manage WardayaCode plugins' },
-  { name: '/reload-plugins', description: 'Activate pending plugin changes in the current session' },
   { name: '/review', description: 'Review a pull request' },
   { name: '/sandbox', description: 'Configure the sandbox' },
   { name: '/security-review', description: 'Complete a security review of the pending changes on the current branch' },
@@ -76,19 +71,12 @@ export interface SlashCommandContext {
   clearMessages: () => void;
   setPermissionMode: (mode: PermissionMode) => void;
   setThemeMode: (mode: 'dark' | 'light') => void;
-  setColor: (color: string) => void;
-  getColor: () => string;
   copyLastResponse: () => Promise<string>;
   setEffort: (level: string) => void;
   getEffort: () => string;
   setTuiRenderer: (renderer: string) => string;
-  getDirectories: () => string[];
-  addDirectory: (dir: string) => string;
   getAgentConfigSummary: () => string;
   createBranch: (name: string) => Promise<string>;
-  listPlugins: () => string[];
-  reloadPlugins: () => Promise<string>;
-  getSandboxStatus: () => string;
   runSecurityReview: () => Promise<string>;
   getSessionId: () => string;
   getSessionName: () => string;
@@ -102,8 +90,6 @@ export interface SlashCommandContext {
   getSessionDuration: () => number;
   getMessageCount: () => number;
   getContextStats: () => { messageCount: number; estimatedTokens: number; shouldCompact: boolean };
-  getFastMode: () => boolean;
-  setFastMode: (fast: boolean) => void;
   getConfigSummary: () => string;
   openKeybindings: () => Promise<string>;
   exportSession: () => Promise<string>;
@@ -118,8 +104,6 @@ export interface SlashCommandContext {
   compact: () => Promise<string>;
   openUrl: (url: string) => Promise<string>;
   getProjectRoot: () => string;
-  /** Scan the project for plugin files. Returns file paths relative to project root. */
-  scanPlugins: () => string[];
   /** List configured MCP servers. */
   mcpList: () => Promise<string>;
   /** Connect an MCP server by name. */
@@ -213,7 +197,6 @@ export async function handleSlashCommand(
         `Version:  ${ctx.getVersion()}`,
         `Model:    ${ctx.getModel()}`,
         `Mode:     ${ctx.getPermissionMode()}`,
-        `Fast:     ${ctx.getFastMode() ? 'on' : 'off'}`,
         `Effort:   ${ctx.getEffort()}`,
         `Session:  ${ctx.getSessionId().slice(0, 8)}`,
         `Uptime:   ${sDur}`,
@@ -306,7 +289,6 @@ export async function handleSlashCommand(
         output: [
           `Model:     ${modelShort}`,
           `Mode:      ${ctx.getPermissionMode()}`,
-          `Fast:      ${ctx.getFastMode() ? 'on' : 'off'}`,
           `Messages:  ${ctx.getMessageCount()}`,
           `Tokens in: ~${stUsage.input.toLocaleString()}`,
           `Tokens out:~${stUsage.output.toLocaleString()}`,
@@ -315,25 +297,11 @@ export async function handleSlashCommand(
       };
     }
 
-    case '/fast': {
-      const newFast = !ctx.getFastMode();
-      ctx.setFastMode(newFast);
-      return { handled: true, output: `Fast mode ${newFast ? 'enabled' : 'disabled'}.` };
-    }
-
     case '/config':
       return { handled: true, output: ctx.getConfigSummary() };
 
     case '/keybindings':
       return { handled: true, output: await ctx.openKeybindings() };
-
-    case '/color': {
-      if (!arg) {
-        return { handled: true, output: `Current color: ${ctx.getColor()}\nUsage: /color <name>` };
-      }
-      ctx.setColor(arg);
-      return { handled: true, output: `Color set to: ${arg}` };
-    }
 
     case '/skills': {
       const { loadSkills } = await import('../extensibility/skillLoader.js');
@@ -362,23 +330,30 @@ export async function handleSlashCommand(
       const { existsSync, readdirSync, readFileSync } = await import('fs');
       const { join } = await import('path');
       const { homedir } = await import('os');
-      const memDir = join(homedir(), '.claude', 'memory');
-      if (!existsSync(memDir)) {
-        return { handled: true, output: 'No memory files found.\nMemory files are stored in ~/.claude/memory/.\nUse /memory <topic> to view or create a memory entry.' };
+      const memDirs = [
+        join(ctx.getProjectRoot(), '.wardayacode', 'memory'),
+        join(homedir(), '.config', 'wardayacode', 'memory'),
+      ];
+      const files: { name: string; path: string }[] = [];
+      for (const dir of memDirs) {
+        if (!existsSync(dir)) continue;
+        for (const f of readdirSync(dir).filter(f => f.endsWith('.md'))) {
+          files.push({ name: f, path: join(dir, f) });
+        }
       }
-      const files = readdirSync(memDir).filter(f => f.endsWith('.md'));
+      const locations = 'Memory files are stored in .wardayacode/memory/ or ~/.config/wardayacode/memory/.';
       if (files.length === 0) {
-        return { handled: true, output: 'No memory files found.\nMemory files are stored in ~/.claude/memory/.\nUse /memory <topic> to view or create a memory entry.' };
+        return { handled: true, output: `No memory files found.\n${locations}\nUse /memory <topic> to view or create a memory entry.` };
       }
       if (arg) {
-        const topicFile = files.find(f => f.toLowerCase().includes(arg.toLowerCase()));
-        if (!topicFile) {
-          return { handled: true, output: `No memory found matching "${arg}".\nAvailable topics:\n  ${files.map(f => f.replace('.md', '')).join('\n  ')}` };
+        const match = files.find(f => f.name.toLowerCase().includes(arg.toLowerCase()));
+        if (!match) {
+          return { handled: true, output: `No memory found matching "${arg}".\nAvailable topics:\n  ${files.map(f => f.name.replace('.md', '')).join('\n  ')}` };
         }
-        const content = readFileSync(join(memDir, topicFile), 'utf-8');
-        return { handled: true, output: `${topicFile.replace('.md', '')}:\n${content.trim()}` };
+        const content = readFileSync(match.path, 'utf-8');
+        return { handled: true, output: `${match.name.replace('.md', '')}:\n${content.trim()}` };
       }
-      return { handled: true, output: `Memory files:\n  ${files.map(f => f.replace('.md', '')).join('\n  ')}\n\nUse /memory <topic> to view a memory entry.` };
+      return { handled: true, output: `Memory files:\n  ${files.map(f => f.name.replace('.md', '')).join('\n  ')}\n\n${locations}\nUse /memory <topic> to view a memory entry.` };
     }
 
     case '/anw': {
@@ -408,14 +383,6 @@ export async function handleSlashCommand(
 
     case '/permissions':
       return { handled: true, output: ctx.getPermissionRules() };
-
-    case '/add-dir': {
-      if (!arg) {
-        const dirs = ctx.getDirectories();
-        return { handled: true, output: dirs.length ? `Working directories:\n  ${dirs.join('\n  ')}` : 'No additional directories. Use /add-dir <path> to add one.' };
-      }
-      return { handled: true, output: ctx.addDirectory(arg) };
-    }
 
     case '/doctor': {
       const { execSync } = await import('node:child_process');
@@ -476,17 +443,6 @@ export async function handleSlashCommand(
       }
       return { handled: true, output: await ctx.mcpStatus() };
     }
-
-    case '/plugin': {
-      const plugins = ctx.scanPlugins();
-      if (plugins.length === 0) {
-        return { handled: true, output: 'No plugins loaded.\nPlugins extend WardayaCode with custom functionality.' };
-      }
-      return { handled: true, output: `Loaded plugins:\n  ${plugins.join('\n  ')}` };
-    }
-
-    case '/reload-plugins':
-      return { handled: true, output: await ctx.reloadPlugins() };
 
     case '/review':
       return { handled: true, output: await ctx.listOpenPRs() };

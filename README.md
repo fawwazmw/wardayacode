@@ -6,8 +6,7 @@
 [![npm](https://img.shields.io/npm/v/wardayacode)](https://www.npmjs.com/package/wardayacode)
 [![CI](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml/badge.svg)](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-398-brightgreen)](https://github.com/fawwazmw/wardayacode)
-[![Coverage](https://img.shields.io/badge/coverage-73%25-yellowgreen)](https://github.com/fawwazmw/wardayacode)
+[![Tests](https://img.shields.io/badge/tests-433-brightgreen)](https://github.com/fawwazmw/wardayacode)
 
 <p align="center">
   <img src="docs/wardayacode-demo.png" alt="WardayaCode terminal UI" width="720">
@@ -117,16 +116,15 @@ Type `/` in the TUI to open the command palette, or browse the full catalog with
 | `/resume`     | Resume a previous session          |
 | `/init`       | Create WARDAYA.md for your project |
 | `/plan`       | Enter plan mode (read-only)        |
-| `/fast`       | Toggle fast mode                   |
 | `/stats`      | Usage statistics                   |
-| `/model`      | Switch AI model                    |
+| `/model`      | Show current model                 |
 | `/effort`     | Set effort level (low/medium/high) |
 | `/branch`     | Create a git branch                |
 | `/diff`       | View uncommitted changes           |
 | `/undo`       | Revert last file edit              |
 | `/checkpoint` | Create a git stash checkpoint      |
 | `/rollback`   | Restore last checkpoint            |
-| `/review`     | Pull request review guide          |
+| `/review`     | List open pull requests            |
 | `/copy`       | Copy last response to clipboard    |
 | `/doctor`     | Installation diagnostics           |
 | `/feedback`   | Submit feedback                    |
@@ -260,7 +258,6 @@ src/
 | `Ctrl+Z`      | Suspend                       |
 | `Ctrl+V`      | Paste images                  |
 | `Alt+P`       | Switch model                  |
-| `Alt+O`       | Toggle fast mode              |
 | `Ctrl+S`      | Stash prompt                  |
 | `Ctrl+G`      | Edit in `$EDITOR`             |
 | `\` + `Enter` | Multi-line input              |

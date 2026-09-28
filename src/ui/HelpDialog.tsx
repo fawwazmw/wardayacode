@@ -36,12 +36,10 @@ interface HelpCommand {
 // reference list (kept separate from the live SLASH_COMMANDS registry that
 // drives autocomplete and the command handler).
 const HELP_COMMANDS: HelpCommand[] = [
-  { name: '/add-dir', desc: 'Add a new working directory' },
   { name: '/agents', desc: 'Manage agent configurations' },
   { name: '/branch', desc: 'Create a branch of the current conversation at this point' },
   { name: '/anw', desc: 'Ask a quick side question without interrupting the main conversation' },
   { name: '/clear', desc: 'Start fresh: discard the current conversation and context' },
-  { name: '/color', desc: 'Set the prompt bar color for this session' },
   { name: '/compact', desc: 'Clear conversation history but keep a summary in context' },
   { name: '/config', desc: 'Open config panel' },
   { name: '/context', desc: 'Visualize current usage as a colored grid' },
@@ -52,7 +50,6 @@ const HELP_COMMANDS: HelpCommand[] = [
   { name: '/effort', desc: 'Set effort level for model usage' },
   { name: '/exit', desc: 'Exit the REPL' },
   { name: '/export', desc: 'Export the current conversation to a file or clipboard' },
-  { name: '/fast', desc: 'Toggle fast mode' },
   { name: '/feedback', desc: 'Submit feedback about WardayaCode' },
   { name: '/help', desc: 'Show help and available commands' },
   { name: '/hooks', desc: 'View hook configurations for tool events' },
@@ -63,8 +60,6 @@ const HELP_COMMANDS: HelpCommand[] = [
   { name: '/model', desc: 'Set the AI model for WardayaCode' },
   { name: '/permissions', desc: 'Manage allow & deny tool permission rules' },
   { name: '/plan', desc: 'Enable plan mode or view the current session plan' },
-  { name: '/plugin', desc: 'Manage WardayaCode plugins' },
-  { name: '/reload-plugins', desc: 'Activate pending plugin changes in the current session' },
   { name: '/rename', desc: 'Rename the current conversation' },
   { name: '/resume', desc: 'Resume a previous conversation' },
   { name: '/review', desc: 'Review a pull request' },
@@ -100,7 +95,6 @@ const SHORTCUT_GROUPS: Shortcut[][] = [
     { key: 'ctrl + z', desc: 'to suspend' },
     { key: 'ctrl + v', desc: 'to paste images' },
     { key: 'alt + p', desc: 'to switch model' },
-    { key: 'alt + o', desc: 'to toggle fast mode' },
     { key: 'ctrl + s', desc: 'to stash prompt' },
     { key: 'ctrl + g', desc: 'to edit in $EDITOR' },
     { key: '/keybindings', desc: 'to customize' },
