@@ -170,6 +170,40 @@ describe('PermissionSystem — addRule and pattern matching', () => {
     expect(allowed.allowed).toBe(true);
   });
 
+  it('pattern rule matches file tools on input.filePath', async () => {
+    const perms = new PermissionSystem('auto');
+    perms.addRule({ tool: 'write_file', action: 'deny', pattern: '**/.env', reason: 'no env writes' });
+    const denied = await perms.check({ name: 'write_file', input: { filePath: '/project/.env' } });
+    const allowed = await perms.check({ name: 'write_file', input: { filePath: '/project/index.ts' } });
+    expect(denied.allowed).toBe(false);
+    expect(allowed.allowed).toBe(true);
+  });
+
+  it('a path-scoped rule does not match a call with no path', async () => {
+    const perms = new PermissionSystem('auto');
+    perms.addRule({ tool: 'bash', action: 'deny', pattern: '**/secret/**', reason: 'restricted' });
+    const result = await perms.check({ name: 'bash', input: { command: 'ls' } });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('sandbox blocks risky tools in any mode and survives setMode', async () => {
+    const perms = new PermissionSystem('auto');
+    perms.setSandbox(true);
+
+    const bash = await perms.check({ name: 'bash', input: {} });
+    const write = await perms.check({ name: 'write_file', input: {} });
+    expect(bash.allowed).toBe(false);
+    expect(bash.reason).toContain('sandbox');
+    expect(write.allowed).toBe(false);
+
+    // Changing permission mode must not drop sandbox enforcement.
+    perms.setMode('auto');
+    expect((await perms.check({ name: 'bash', input: {} })).allowed).toBe(false);
+
+    perms.setSandbox(false);
+    expect((await perms.check({ name: 'write_file', input: {} })).allowed).toBe(true);
+  });
+
   it('unknown tool is denied when no wildcard rule matches', async () => {
     const perms = new PermissionSystem('default');
     // Remove wildcard by replacing rules with only the explicit denies
