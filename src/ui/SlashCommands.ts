@@ -332,32 +332,13 @@ export async function handleSlashCommand(
     }
 
     case '/skills': {
-      const { existsSync, readdirSync, readFileSync } = await import('fs');
-      const { join } = await import('path');
-      const root = ctx.getProjectRoot();
-      const skillsDir = join(root, '.wardayacode', 'skills');
-      if (!existsSync(skillsDir)) {
-        return { handled: true, output: 'No skills directory found.\nCreate .md or .js files in .wardayacode/skills/ to define custom skills.' };
+      const { loadSkills } = await import('../extensibility/skillLoader.js');
+      const skills = await loadSkills(ctx.getProjectRoot());
+      if (skills.length === 0) {
+        return { handled: true, output: 'No skills found.\nAdd .md files to .wardayacode/skills/ or ~/.config/wardayacode/skills/ to define skills.\nSkills are injected into the agent when relevant.' };
       }
-      const files = readdirSync(skillsDir).filter(f => f.endsWith('.md') || f.endsWith('.js'));
-      if (files.length === 0) {
-        return { handled: true, output: 'No skill files found in .wardayacode/skills/.\nCreate .md or .js files to define custom skills.' };
-      }
-      const lines: string[] = [];
-      for (const f of files) {
-        const name = f.replace(/\.(md|js)$/, '');
-        let desc = f.endsWith('.md') ? 'Markdown skill' : 'JavaScript skill';
-        // Try to extract the first heading line or a brief description from .md files
-        if (f.endsWith('.md')) {
-          try {
-            const content = readFileSync(join(skillsDir, f), 'utf-8');
-            const heading = content.match(/^#\s+(.+)/m);
-            if (heading) desc = heading[1]!;
-          } catch { /* use default description */ }
-        }
-        lines.push(`  ${name.padEnd(20)} ${desc}`);
-      }
-      return { handled: true, output: `Custom skills (${files.length}):\n${lines.join('\n')}\n\nSkills are loaded from .wardayacode/skills/.` };
+      const lines = skills.map(s => `  ${s.name.padEnd(20)} ${s.description}`);
+      return { handled: true, output: `Skills (${skills.length}):\n${lines.join('\n')}\n\nSkills are injected into the agent when relevant.` };
     }
 
     case '/copy':

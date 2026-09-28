@@ -20,6 +20,8 @@ import { ToolRegistry, registerCoreTools, UndoManager } from './tools/index.js';
 import { PermissionSystem } from './permissions/PermissionSystem.js';
 import { McpManager } from './mcp/McpManager.js';
 import { HookSystem } from './extensibility/HookSystem.js';
+import { SkillSystem } from './extensibility/SkillSystem.js';
+import { loadSkills } from './extensibility/skillLoader.js';
 import { Agent } from './agent/index.js';
 import { buildSystemPrompt } from './agent/systemPrompt.js';
 import { Session } from './session/Session.js';
@@ -254,10 +256,16 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
 
   const projectRoot = process.cwd();
 
+  // Load user-defined skills and expose them to the agent via the system prompt.
+  const skillSystem = new SkillSystem();
+  for (const skill of await loadSkills(projectRoot)) {
+    skillSystem.register(skill);
+  }
+
   const mcpManager = new McpManager(toolRegistry);
   await mcpManager.loadConfig(projectRoot);
 
-  const systemPrompt = options.systemPrompt ?? config.systemPrompt ?? await buildSystemPrompt(projectRoot);
+  const systemPrompt = options.systemPrompt ?? config.systemPrompt ?? await buildSystemPrompt(projectRoot, skillSystem.list());
 
   const agent = new Agent({
     model,

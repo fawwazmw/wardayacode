@@ -234,7 +234,7 @@ describe('handleSlashCommand', () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/skills', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('No skills directory found');
+    expect(result.output).toContain('No skills found');
   });
 
   it('handles /copy', async () => {
