@@ -41,6 +41,10 @@ interface AppProps {
   permissions: PermissionSystem;
   mcpManager?: McpManager;
   version: string;
+  /** Human-readable hook status for /hooks. */
+  hooksInfo: () => Promise<string>;
+  /** Trust the current project's hooks and activate them. */
+  trustHooks: () => Promise<string>;
   maxTokens: number;
   temperature: number;
   maxRetries: number;
@@ -67,6 +71,8 @@ export function App({
   permissions,
   mcpManager,
   version,
+  hooksInfo,
+  trustHooks,
   maxTokens,
   temperature,
   maxRetries,
@@ -94,14 +100,10 @@ export function App({
   const [sandboxEnabled, setSandboxEnabled] = useState(false);
   const sandboxRef = useRef(sandboxEnabled);
   sandboxRef.current = sandboxEnabled;
-  const [tasks, setTasks] = useState<{ id: number; desc: string; status: string }[]>([]);
-  const taskIdCounter = useRef(0);
   const sessionNameRef = useRef(sessionName);
   sessionNameRef.current = sessionName;
   const effortLevelRef = useRef(effortLevel);
   effortLevelRef.current = effortLevel;
-  const tasksRef = useRef(tasks);
-  tasksRef.current = tasks;
   const sandboxEnabledRef = useRef(sandboxEnabled);
   sandboxEnabledRef.current = sandboxEnabled;
   const abortRef = useRef<AbortController | null>(null);
@@ -492,6 +494,8 @@ export function App({
         );
         return `MCP servers:\n${lines.join('\n')}`;
       },
+      getHooksInfo: () => hooksInfo(),
+      trustHooks: () => trustHooks(),
       getSandboxEnabled: () => sandboxRef.current,
       setSandboxEnabled: (enabled: boolean) => {
         setSandboxEnabled(enabled);
@@ -631,24 +635,24 @@ export function App({
         }
       },
       getProjectRoot: () => process.cwd(),
-      addTask: (desc: string) => {
-        taskIdCounter.current += 1;
-        const id = taskIdCounter.current;
-        setTasks(prev => [...prev, { id, desc, status: 'running' }]);
-        return id;
-      },
-      listTasks: () => tasksRef.current,
-      clearTasks: (id?: number) => {
-        if (id === undefined) {
-          setTasks([]);
-          return 'All tasks cleared.';
+      getPermissionRules: () => {
+        const rules = permissions.getRules();
+        const lines = [`Permission mode: ${currentPermissionMode}`, '', 'Rules (first match wins):'];
+        if (rules.length === 0) {
+          lines.push('  (none)');
+        } else {
+          for (const r of rules) {
+            const pattern = r.pattern ? ` pattern=${r.pattern}` : '';
+            const reason = r.reason ? `  — ${r.reason}` : '';
+            lines.push(`  ${r.action.toUpperCase().padEnd(5)} ${r.tool}${pattern}${reason}`);
+          }
         }
-        let found = false;
-        setTasks(prev => prev.filter(t => {
-          if (t.id === id) found = true;
-          return t.id !== id;
-        }));
-        return found ? `Task ${id} cleared.` : `No task with id ${id}.`;
+        const allowList = permissions.getSessionAllowList();
+        if (allowList.length > 0) {
+          lines.push('', `Session allow-list: ${allowList.join(', ')}`);
+        }
+        lines.push('', 'Change mode with /mode; approvals add to the session allow-list.');
+        return lines.join('\n');
       },
       askSideQuestion: async (question: string) => {
         if (!languageModel) {

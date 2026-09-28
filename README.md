@@ -55,7 +55,7 @@ Type any task in natural language. The agent reads your files, makes edits, runs
 
 - **Multi-provider** — Anthropic Claude, OpenAI GPT, Google Gemini. Switch at runtime with `/model`.
 - **Permission controls** — Four modes (`default`, `plan`, `acceptEdits`, `auto`) gate every tool call.
-- **52 slash commands** — Full command catalog with tabbed help dialog. Type `/help` to browse.
+- **44 slash commands** — Full command catalog with tabbed help dialog. Type `/help` to browse.
 - **Session management** — Auto-saved conversations, resume across restarts, export to markdown.
 - **Undo & checkpoint** — Revert file edits, git stashing, diff viewing.
 - **Extensible** — Hook system, skill system, MCP support, custom commands.
@@ -126,7 +126,6 @@ Type `/` in the TUI to open the command palette, or browse the full catalog with
 | `/rollback`   | Restore last checkpoint            |
 | `/review`     | List open pull requests            |
 | `/copy`       | Copy last response to clipboard    |
-| `/insights`   | Session token summary              |
 | `/doctor`     | Installation diagnostics           |
 | `/feedback`   | Submit feedback                    |
 | `/config`     | Show configuration                 |

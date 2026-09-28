@@ -16,29 +16,21 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/context', description: 'Visualize current context usage stats' },
   { name: '/resume', description: 'Resume a previous conversation', args: '<session-id>' },
   { name: '/init', description: 'Initialize a new WARDAYA.md file with codebase documentation' },
-  { name: '/insights', description: 'Generate a report analyzing your WardayaCode sessions' },
   { name: '/plan', description: 'Switch to plan mode (read-only, no destructive actions)' },
   { name: '/stats', description: 'Show usage statistics and activity for this session' },
   { name: '/config', description: 'Show current configuration summary' },
   { name: '/keybindings', description: 'Open or create your keybindings configuration file' },
   { name: '/skills', description: 'List available skills' },
-  { name: '/release-notes', description: 'View release notes' },
-  { name: '/recap', description: 'Generate a one-line session recap' },
   { name: '/copy', description: "Copy the last response to clipboard", args: '[N]' },
   { name: '/feedback', description: 'Submit feedback about WardayaCode' },
-  { name: '/tasks', description: 'List and manage background tasks' },
-  { name: '/statusline', description: "Set up WardayaCode's status line UI" },
   { name: '/hooks', description: 'View hook configurations for tool events' },
   { name: '/memory', description: 'Edit Wardaya memory files' },
   { name: '/anw', description: 'Ask a quick side question without interrupting the main conversation' },
   { name: '/effort', description: 'Set effort level for model usage', args: '<level>' },
   { name: '/tui', description: 'Set the terminal UI renderer (default only)', args: '<mode>' },
-  { name: '/ide', description: 'Manage IDE integrations and show status' },
   { name: '/stickers', description: 'Get link to order WardayaCode stickers' },
   { name: '/permissions', description: 'Manage allow & deny tool permission rules' },
-  { name: '/team-onboarding', description: 'Help teammates ramp on WardayaCode with a guide from your usage' },
   { name: '/doctor', description: 'Diagnose and verify your WardayaCode installation and settings' },
-  { name: '/rewind', description: 'Restore the code and/or conversation to a previous point' },
   { name: '/agents', description: 'Manage agent configurations' },
   { name: '/branch', description: 'Create a branch of the current conversation at this point', args: '<name>' },
   { name: '/mcp', description: 'Manage MCP servers' },
@@ -92,6 +84,8 @@ export interface SlashCommandContext {
   getModel: () => string;
   getVersion: () => string;
   getPermissionMode: () => PermissionMode;
+  /** Human-readable list of the active permission rules. */
+  getPermissionRules: () => string;
   getTokenUsage: () => { input: number; output: number };
   getSessionDuration: () => number;
   getMessageCount: () => number;
@@ -110,12 +104,6 @@ export interface SlashCommandContext {
   compact: () => Promise<string>;
   openUrl: (url: string) => Promise<string>;
   getProjectRoot: () => string;
-  /** Add a background task and return an ID. */
-  addTask: (description: string) => number;
-  /** List all tasks with status. Returns [{id, desc, status}]. */
-  listTasks: () => { id: number; desc: string; status: string }[];
-  /** Clear a task by id, or all tasks if no id. */
-  clearTasks: (id?: number) => string;
   /** List configured MCP servers. */
   mcpList: () => Promise<string>;
   /** Connect an MCP server by name. */
@@ -124,6 +112,10 @@ export interface SlashCommandContext {
   mcpDisconnect: (name: string) => Promise<string>;
   /** Show MCP server connection status. */
   mcpStatus: () => Promise<string>;
+  /** Human-readable hook status. */
+  getHooksInfo: () => Promise<string>;
+  /** Trust the current project's hooks and activate them. */
+  trustHooks: () => Promise<string>;
   /** Enable or disable the sandbox. */
   setSandboxEnabled: (enabled: boolean) => void;
   /** Get sandbox enabled state. */
@@ -284,11 +276,6 @@ export async function handleSlashCommand(
     case '/init':
       return { handled: true, output: await ctx.initWardayaDoc() };
 
-    case '/insights': {
-      const iUsage = ctx.getTokenUsage();
-      return { handled: true, output: `Session insights:\n  Messages: ${ctx.getMessageCount()}\n  Tokens in: ~${iUsage.input}\n  Tokens out: ~${iUsage.output}\n  Model: ${ctx.getModel()}\n  Duration: ${formatDuration(ctx.getSessionDuration())}` };
-    }
-
     case '/plan':
       ctx.setPermissionMode('plan');
       return { handled: true, output: 'Switched to plan mode (read-only). Use /mode to change.' };
@@ -317,43 +304,13 @@ export async function handleSlashCommand(
       return { handled: true, output: await ctx.openKeybindings() };
 
     case '/skills': {
-      const { existsSync, readdirSync, readFileSync } = await import('fs');
-      const { join } = await import('path');
-      const root = ctx.getProjectRoot();
-      const skillsDir = join(root, '.wardayacode', 'skills');
-      if (!existsSync(skillsDir)) {
-        return { handled: true, output: 'No skills directory found.\nCreate .md or .js files in .wardayacode/skills/ to define custom skills.' };
+      const { loadSkills } = await import('../extensibility/skillLoader.js');
+      const skills = await loadSkills(ctx.getProjectRoot());
+      if (skills.length === 0) {
+        return { handled: true, output: 'No skills found.\nAdd .md files to .wardayacode/skills/ or ~/.config/wardayacode/skills/ to define skills.\nSkills are injected into the agent when relevant.' };
       }
-      const files = readdirSync(skillsDir).filter(f => f.endsWith('.md') || f.endsWith('.js'));
-      if (files.length === 0) {
-        return { handled: true, output: 'No skill files found in .wardayacode/skills/.\nCreate .md or .js files to define custom skills.' };
-      }
-      const lines: string[] = [];
-      for (const f of files) {
-        const name = f.replace(/\.(md|js)$/, '');
-        let desc = f.endsWith('.md') ? 'Markdown skill' : 'JavaScript skill';
-        // Try to extract the first heading line or a brief description from .md files
-        if (f.endsWith('.md')) {
-          try {
-            const content = readFileSync(join(skillsDir, f), 'utf-8');
-            const heading = content.match(/^#\s+(.+)/m);
-            if (heading) desc = heading[1]!;
-          } catch { /* use default description */ }
-        }
-        lines.push(`  ${name.padEnd(20)} ${desc}`);
-      }
-      return { handled: true, output: `Custom skills (${files.length}):\n${lines.join('\n')}\n\nSkills are loaded from .wardayacode/skills/.` };
-    }
-
-    case '/release-notes': {
-      const v = ctx.getVersion();
-      return { handled: true, output: `WardayaCode v${v}\nSee https://github.com/fawwazmw/wardayacode/releases for release notes.` };
-    }
-
-    case '/recap': {
-      const rDur = formatDuration(ctx.getSessionDuration());
-      const rUsage = ctx.getTokenUsage();
-      return { handled: true, output: `Session: ${ctx.getMessageCount()} msgs, ${rDur}, ~${rUsage.input + rUsage.output} tokens used` };
+      const lines = skills.map(s => `  ${s.name.padEnd(20)} ${s.description}`);
+      return { handled: true, output: `Skills (${skills.length}):\n${lines.join('\n')}\n\nSkills are injected into the agent when relevant.` };
     }
 
     case '/copy':
@@ -362,47 +319,11 @@ export async function handleSlashCommand(
     case '/feedback':
       return { handled: true, output: await ctx.openUrl('https://github.com/fawwazmw/wardayacode/issues/new/choose') };
 
-    case '/tasks': {
-      if (arg === 'clear') {
-        return { handled: true, output: ctx.clearTasks() };
-      }
-      const taskId = arg ? Number(arg) : undefined;
-      if (taskId !== undefined && !Number.isNaN(taskId)) {
-        return { handled: true, output: ctx.clearTasks(taskId) };
-      }
-      const tasks = ctx.listTasks();
-      if (tasks.length === 0) {
-        return { handled: true, output: 'Background tasks:\n  No active tasks.' };
-      }
-      return {
-        handled: true,
-        output: `Background tasks (${tasks.length}):\n${tasks.map(t => `  [${t.id}] ${t.desc} — ${t.status}`).join('\n')}\nUse /tasks <id> to clear a task, /tasks clear to clear all.`,
-      };
-    }
-
-    case '/statusline':
-      return { handled: true, output: `Status line shows:\n  Model:     ${ctx.getModel()}\n  Mode:      ${ctx.getPermissionMode()}\n  Messages:  ${ctx.getMessageCount()}\n  Duration:  ${formatDuration(ctx.getSessionDuration())}\nUse /config to see full configuration.` };
-
     case '/hooks': {
-      const { existsSync, readdirSync } = await import('fs');
-      const { join } = await import('path');
-      const { homedir } = await import('os');
-      const hookDirs = [
-        join(ctx.getProjectRoot(), '.wardayacode', 'hooks'),
-        join(homedir(), '.config', 'wardayacode', 'hooks'),
-      ];
-      const hooks: string[] = [];
-      for (const dir of hookDirs) {
-        if (existsSync(dir)) {
-          for (const f of readdirSync(dir).filter(f => f.endsWith('.sh'))) {
-            hooks.push(f);
-          }
-        }
+      if (arg === 'trust') {
+        return { handled: true, output: await ctx.trustHooks() };
       }
-      if (hooks.length === 0) {
-        return { handled: true, output: 'No hook scripts found.\nHooks are shell commands that run on tool events.\nAdd .sh files to .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.' };
-      }
-      return { handled: true, output: `Hook scripts:\n  ${hooks.join('\n  ')}` };
+      return { handled: true, output: await ctx.getHooksInfo() };
     }
 
     case '/memory': {
@@ -457,30 +378,11 @@ export async function handleSlashCommand(
       return { handled: true, output: ctx.setTuiRenderer(arg) };
     }
 
-    case '/ide': {
-      const root = ctx.getProjectRoot();
-      const { existsSync } = await import('fs');
-      const { join } = await import('path');
-      const hasVscode = root ? existsSync(join(root, '.vscode')) : false;
-      const hasJetbrains = root ? existsSync(join(root, '.idea')) : false;
-      const lines = ['IDE integrations:'];
-      lines.push(`  VS Code:    ${hasVscode ? '✓ .vscode/ detected' : '— not detected'}`);
-      lines.push(`  JetBrains:  ${hasJetbrains ? '✓ .idea/ detected' : '— not detected'}`);
-      if (!hasVscode && !hasJetbrains) {
-        lines.push('');
-        lines.push('  No IDE config found in the project root.');
-      }
-      return { handled: true, output: lines.join('\n') };
-    }
-
     case '/stickers':
       return { handled: true, output: await ctx.openUrl('https://github.com/fawwazmw/wardayacode') };
 
     case '/permissions':
-      return { handled: true, output: `Permission mode: ${ctx.getPermissionMode()}\nUse /mode to change.\nRules are evaluated top-to-bottom; first match wins.` };
-
-    case '/team-onboarding':
-      return { handled: true, output: 'Team onboarding guide:\nShare your WardayaCode workflow with teammates.\nSee docs at https://github.com/fawwazmw/wardayacode' };
+      return { handled: true, output: ctx.getPermissionRules() };
 
     case '/doctor': {
       const { execSync } = await import('node:child_process');
@@ -518,9 +420,6 @@ export async function handleSlashCommand(
 
       return { handled: true, output: `WardayaCode diagnostics:\n${issues.join('\n')}` };
     }
-
-    case '/rewind':
-      return { handled: true, output: 'Rewind restores code and/or conversation to a previous state.\nUse /checkpoint to create save points, /rollback to restore.' };
 
     case '/agents':
       return { handled: true, output: ctx.getAgentConfigSummary() };
