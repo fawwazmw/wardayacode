@@ -7,11 +7,15 @@ export type PermissionPromptHandler = (
   reason: string
 ) => Promise<'allow' | 'deny' | 'always'>;
 
+/** Tools blocked whenever sandbox mode is enabled. */
+const SANDBOX_BLOCKED_TOOLS = new Set(['bash', 'git', 'write_file', 'edit_file']);
+
 export class PermissionSystem {
   private mode: PermissionMode;
   private rules: PermissionRule[] = [];
   private sessionAllowList = new Set<string>();
   private promptHandler?: PermissionPromptHandler;
+  private sandboxEnabled = false;
 
   constructor(mode: PermissionMode = 'default') {
     this.mode = mode;
@@ -72,6 +76,12 @@ export class PermissionSystem {
       return { allowed: true };
     }
 
+    // Sandbox is independent of the rule list and the permission mode: once
+    // enabled it blocks the risky tools in every mode until explicitly disabled.
+    if (this.sandboxEnabled && SANDBOX_BLOCKED_TOOLS.has(toolUse.name)) {
+      return { allowed: false, reason: 'Blocked by sandbox mode' };
+    }
+
     for (const rule of this.rules) {
       if (this.matchesRule(toolUse, rule)) {
         if (rule.action === 'deny') {
@@ -118,9 +128,14 @@ export class PermissionSystem {
       }
     }
 
-    if (rule.pattern && toolUse.input?.path) {
-      const path = String(toolUse.input.path);
-      if (!minimatch(path, rule.pattern)) {
+    if (rule.pattern) {
+      // File tools use `filePath`; search/list tools use `path`. A path-scoped
+      // rule only applies when the call actually has a path.
+      const rawPath = toolUse.input?.filePath ?? toolUse.input?.path;
+      if (rawPath === undefined) {
+        return false;
+      }
+      if (!minimatch(String(rawPath), rule.pattern)) {
         return false;
       }
     }
@@ -149,5 +164,14 @@ export class PermissionSystem {
 
   getSessionAllowList(): string[] {
     return [...this.sessionAllowList];
+  }
+
+  /** Enable or disable sandbox mode (independent of the permission mode). */
+  setSandbox(enabled: boolean): void {
+    this.sandboxEnabled = enabled;
+  }
+
+  isSandboxEnabled(): boolean {
+    return this.sandboxEnabled;
   }
 }

@@ -49,12 +49,14 @@ export class ContextManager {
   }
 
   private deduplicateMessages(messages: Message[]): Message[] {
+    // Only collapse exact repeats of the same message id (e.g. an accidental
+    // double-append). Distinct turns that happen to share text ("yes",
+    // "continue") must NOT be merged or the conversation loses a turn.
+    const seen = new Set<string>();
     const result: Message[] = [];
     for (const msg of messages) {
-      const prev = result[result.length - 1];
-      if (prev && prev.role === msg.role && prev.content === msg.content) {
-        continue;
-      }
+      if (seen.has(msg.id)) continue;
+      seen.add(msg.id);
       result.push(msg);
     }
     return result;
@@ -96,6 +98,12 @@ export class ContextManager {
 
       kept.unshift(msg);
       currentTokens += msgTokens;
+    }
+
+    // Anthropic rejects an assistant-first history, so drop leading
+    // assistant/system entries that survived the window.
+    while (kept.length > 0 && kept[0]!.role !== 'user') {
+      kept.shift();
     }
 
     // Prepend a summary marker if we dropped messages

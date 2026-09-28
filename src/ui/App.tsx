@@ -97,15 +97,10 @@ export function App({
   const [effortLevel, setEffortLevel] = useState('medium');
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const [pendingMcp, setPendingMcp] = useState<{ name: string; command: string; resolve: (ok: boolean) => void } | null>(null);
-  const [sandboxEnabled, setSandboxEnabled] = useState(false);
-  const sandboxRef = useRef(sandboxEnabled);
-  sandboxRef.current = sandboxEnabled;
   const sessionNameRef = useRef(sessionName);
   sessionNameRef.current = sessionName;
   const effortLevelRef = useRef(effortLevel);
   effortLevelRef.current = effortLevel;
-  const sandboxEnabledRef = useRef(sandboxEnabled);
-  sandboxEnabledRef.current = sandboxEnabled;
   const abortRef = useRef<AbortController | null>(null);
 
   // Full output of the most-recent tool call, toggled by ctrl+o. It renders in
@@ -138,7 +133,7 @@ export function App({
           const content = msg.result.success
             ? msg.result.content ?? ''
             : msg.result.error ?? msg.result.content ?? '';
-          if (content.trim() === '') return;
+          if (content.trim() === '') continue;
           setExpanded({ toolName: msg.toolName, content });
           return;
         }
@@ -180,6 +175,30 @@ export function App({
     });
   }, [permissions]);
 
+  // Seed the transcript and agent context from an existing session when the
+  // process was launched with --resume (the in-session /resume path seeds its
+  // own state, but startup resume previously showed an empty conversation).
+  React.useEffect(() => {
+    const existing = initialSession.getMessages();
+    if (existing.length === 0) return;
+
+    const ctx = contextManagerRef.current;
+    ctx.clear();
+    for (const m of existing) {
+      if (m.role === 'user' || m.role === 'assistant') {
+        ctx.addMessage({ id: m.id, role: m.role, content: m.content, timestamp: m.timestamp });
+      }
+    }
+
+    setMessages(
+      existing.map(m => ({
+        type: 'text' as const,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+    );
+  }, [initialSession]);
+
   const handlePermissionDecision = useCallback((decision: 'allow' | 'deny' | 'always') => {
     if (pendingPermission) {
       pendingPermission.resolve(decision);
@@ -206,13 +225,12 @@ export function App({
       return;
     }
     if (abortRef.current) {
+      // Abort the in-flight request; the run's catch/finally surfaces the
+      // cancellation and clears loading state. Do NOT flip isLoading here, or
+      // a new prompt could start a second concurrent run.
       abortRef.current.abort();
-      abortRef.current = null;
-      setIsLoading(false);
-      setStreamingText('');
-      addSystemMessage('Operation cancelled.');
     }
-  }, [addSystemMessage, pendingPermission, pendingMcp]);
+  }, [pendingPermission, pendingMcp]);
 
   const handleSubmit = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -279,6 +297,10 @@ export function App({
       clearMessages: () => {
         setMessages([]);
         setExpanded(null);
+        // Actually drop the conversation context too — otherwise the next
+        // prompt still carries every "cleared" turn to the model.
+        contextManagerRef.current.clear();
+        setTokenUsage({ input: 0, output: 0 });
       },
       setPermissionMode: (mode) => {
         setCurrentPermissionMode(mode);
@@ -496,18 +518,11 @@ export function App({
       },
       getHooksInfo: () => hooksInfo(),
       trustHooks: () => trustHooks(),
-      getSandboxEnabled: () => sandboxRef.current,
+      getSandboxEnabled: () => permissions.isSandboxEnabled(),
       setSandboxEnabled: (enabled: boolean) => {
-        setSandboxEnabled(enabled);
-        if (enabled) {
-          permissions.addRule({ tool: 'bash', action: 'deny', reason: 'Blocked by sandbox mode' });
-          permissions.addRule({ tool: 'git', action: 'deny', reason: 'Blocked by sandbox mode' });
-          permissions.addRule({ tool: 'write_file', action: 'deny', reason: 'Blocked by sandbox mode' });
-          permissions.addRule({ tool: 'edit_file', action: 'deny', reason: 'Blocked by sandbox mode' });
-        } else {
-          // Reload current mode to clear sandbox rules
-          permissions.setMode(permissions.getMode());
-        }
+        // Sandbox is a first-class gate in PermissionSystem, independent of the
+        // permission mode, so /mode changes can't silently drop it.
+        permissions.setSandbox(enabled);
       },
       runSecurityReview: async () => {
         const d = await checkpoint.getDiffSummary();
@@ -752,16 +767,27 @@ export function App({
               startedAt: msg.startedAt,
               durationMs: msg.startedAt !== undefined ? Date.now() - msg.startedAt : undefined,
             };
-            break;
+            return updated;
           }
         }
+        // No in-progress call matched: the tool was denied or blocked before it
+        // started (permission/hook gate), which emits only a result. Surface it
+        // instead of dropping the event silently.
+        updated.push({
+          type: 'tool_call',
+          toolName,
+          args: {},
+          result,
+          startedAt: Date.now(),
+          durationMs: 0,
+        });
         return updated;
       });
     };
 
     const retryHandler = ({ attempt, maxRetries, delayMs, error }: { attempt: number; maxRetries: number; delayMs: number; error: string }) => {
       const delaySec = (delayMs / 1000).toFixed(1);
-      addSystemMessage(`Retrying (attempt ${attempt + 1}/${maxRetries + 1}) in ${delaySec}s — ${error}`);
+      addSystemMessage(`Retrying (attempt ${attempt}/${maxRetries + 1}) in ${delaySec}s — ${error}`);
     };
 
     const usageHandler = ({ promptTokens, completionTokens }: { promptTokens: number; completionTokens: number; totalTokens: number }) => {
@@ -779,7 +805,7 @@ export function App({
 
     const startedAt = Date.now();
     try {
-      const response = await agent.run(newHistory);
+      const response = await agent.run(newHistory, abortRef.current?.signal);
       const durationMs = Date.now() - startedAt;
 
       setStreamingText('');

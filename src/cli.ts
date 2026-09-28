@@ -238,6 +238,20 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
   });
 
+  // Reject unparseable/invalid numerics up front: a NaN maxRetries silently
+  // skips the run loop, and NaN tokens/temperature reach the provider.
+  const numericChecks: Array<[string, number | undefined, (n: number) => boolean]> = [
+    ['--max-retries', config.maxRetries, (n) => Number.isInteger(n) && n >= 0],
+    ['--max-tokens', config.maxTokens, (n) => Number.isFinite(n) && n > 0],
+    ['--temperature', config.temperature !== undefined ? config.temperature : undefined, (n) => Number.isFinite(n) && n >= 0 && n <= 2],
+  ];
+  for (const [flag, value, valid] of numericChecks) {
+    if (value !== undefined && !valid(value)) {
+      console.error(chalk.red(`Invalid value for ${flag}: ${value}`));
+      process.exit(1);
+    }
+  }
+
   const model = createProvider({
     provider: config.provider,
     model: config.model,
@@ -273,6 +287,12 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
 
   const systemPrompt = options.systemPrompt ?? config.systemPrompt ?? await buildSystemPrompt(projectRoot, skillSystem.list());
 
+  const checkpoint = new Checkpoint(projectRoot);
+
+  const session = options.resume
+    ? await loadSession(options.resume, projectRoot, config.permissionMode)
+    : await Session.create(projectRoot, config.permissionMode);
+
   const agent = new Agent({
     model,
     toolRegistry,
@@ -283,13 +303,8 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     temperature: config.temperature,
     maxRetries: config.maxRetries,
     cwd: projectRoot,
+    sessionId: session.getId(),
   });
-
-  const checkpoint = new Checkpoint(projectRoot);
-
-  const session = options.resume
-    ? await loadSession(options.resume, projectRoot, config.permissionMode)
-    : await Session.create(projectRoot, config.permissionMode);
 
   logger.init(session.getId());
   process.on('exit', () => logger.close());
