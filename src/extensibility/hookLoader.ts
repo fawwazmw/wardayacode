@@ -147,6 +147,17 @@ export async function runHookScript(
     child.stderr?.on('data', chunk => {
       stderr += chunk;
     });
+    // A hook may exit without reading stdin; writing then fails with an async
+    // EPIPE. Swallow stream errors so they don't surface as unhandled errors.
+    child.stdin?.on('error', () => {
+      /* hook closed stdin early — ignore */
+    });
+    child.stdout?.on('error', () => {
+      /* ignore */
+    });
+    child.stderr?.on('error', () => {
+      /* ignore */
+    });
     child.on('error', () => finish(undefined));
     child.on('close', code => {
       const parsed = normalizeHookOutput(stdout);
