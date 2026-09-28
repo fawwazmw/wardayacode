@@ -55,4 +55,18 @@ describe('runSelfUpdate', () => {
     mockProcError('npm not found');
     expect(await runSelfUpdate()).toBe(false);
   });
+
+  it('kills the process and resolves false on timeout', async () => {
+    vi.useFakeTimers();
+    const kill = vi.fn();
+    const proc = { on: vi.fn(), kill };
+    (spawn as ReturnType<typeof vi.fn>).mockReturnValue(proc);
+
+    const promise = runSelfUpdate();
+    vi.advanceTimersByTime(5 * 60 * 1000);
+
+    expect(kill).toHaveBeenCalledWith('SIGKILL');
+    await expect(promise).resolves.toBe(false);
+    vi.useRealTimers();
+  });
 });
