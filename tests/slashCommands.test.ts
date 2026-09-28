@@ -22,21 +22,12 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     ]),
     resumeSession: vi.fn().mockResolvedValue('Resumed session abc123 (42 messages)'),
     initWardayaDoc: vi.fn().mockResolvedValue('WARDAYA.md created in /test'),
-    getFastMode: () => false,
-    setFastMode: vi.fn(),
-    getColor: () => 'accent',
-    setColor: vi.fn(),
     copyLastResponse: vi.fn().mockResolvedValue('Last response: Hello!'),
     getEffort: () => 'medium',
     setEffort: vi.fn(),
     setTuiRenderer: (r: string) => `TUI renderer set to: ${r}`,
-    getDirectories: () => ['/test'],
-    addDirectory: vi.fn().mockReturnValue('Added directory: /new'),
     getAgentConfigSummary: () => 'Model: claude-sonnet-4\nMax tokens: 4096\nTemperature: 0',
     createBranch: vi.fn().mockResolvedValue('Branch created: test-branch'),
-    listPlugins: () => [],
-    reloadPlugins: vi.fn().mockResolvedValue('Plugins reloaded.'),
-    getSandboxStatus: () => 'Sandbox: disabled',
     runSecurityReview: vi.fn().mockResolvedValue('Security review: no issues found'),
     getConfigSummary: () => 'Model: claude-sonnet-4\nVersion: 0.5.0\nTheme: dark\nMode: default',
     openKeybindings: vi.fn().mockResolvedValue('Keybindings file: /test/.wardayacode/keybindings.json'),
@@ -51,7 +42,6 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     addTask: vi.fn().mockReturnValue(1),
     listTasks: () => [],
     clearTasks: vi.fn().mockReturnValue('All tasks cleared.'),
-    scanPlugins: () => [],
     scanMcpConfigs: () => [],
     setSandboxEnabled: vi.fn(),
     getSandboxEnabled: () => false,
@@ -194,16 +184,7 @@ describe('handleSlashCommand', () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/stats', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('Fast:');
     expect(result.output).toContain('5');
-  });
-
-  it('handles /fast toggle', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/fast', ctx);
-    expect(result.handled).toBe(true);
-    expect(ctx.setFastMode).toHaveBeenCalledWith(true);
-    expect(result.output).toContain('enabled');
   });
 
   it('handles /config', async () => {
@@ -220,20 +201,6 @@ describe('handleSlashCommand', () => {
     expect(result.handled).toBe(true);
     expect(ctx.openKeybindings).toHaveBeenCalled();
     expect(result.output).toContain('keybindings.json');
-  });
-
-  it('handles /color without arg', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/color', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('accent');
-  });
-
-  it('handles /color with arg', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/color blue', ctx);
-    expect(result.handled).toBe(true);
-    expect(ctx.setColor).toHaveBeenCalledWith('blue');
   });
 
   it('handles /skills', async () => {
@@ -297,7 +264,7 @@ describe('handleSlashCommand', () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/memory', ctx);
     expect(result.handled).toBe(true);
-    expect(result.output).toContain('~/.claude/memory');
+    expect(result.output).toContain('.wardayacode/memory');
   });
 
   it('handles /anw', async () => {
@@ -356,20 +323,6 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('onboarding');
   });
 
-  it('handles /add-dir without arg', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/add-dir', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('/test');
-  });
-
-  it('handles /add-dir with path', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/add-dir /new', ctx);
-    expect(result.handled).toBe(true);
-    expect(ctx.addDirectory).toHaveBeenCalledWith('/new');
-  });
-
   it('handles /doctor', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/doctor', ctx);
@@ -410,20 +363,6 @@ describe('handleSlashCommand', () => {
     const result = await handleSlashCommand('/mcp', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('MCP');
-  });
-
-  it('handles /plugin', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/plugin', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('No plugins');
-  });
-
-  it('handles /reload-plugins', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/reload-plugins', ctx);
-    expect(result.handled).toBe(true);
-    expect(ctx.reloadPlugins).toHaveBeenCalled();
   });
 
   it('handles /review', async () => {
@@ -601,10 +540,8 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/insights');
     expect(names).toContain('/plan');
     expect(names).toContain('/stats');
-    expect(names).toContain('/fast');
     expect(names).toContain('/config');
     expect(names).toContain('/keybindings');
-    expect(names).toContain('/color');
     expect(names).toContain('/skills');
     expect(names).toContain('/release-notes');
     expect(names).toContain('/recap');
@@ -621,14 +558,11 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/stickers');
     expect(names).toContain('/permissions');
     expect(names).toContain('/team-onboarding');
-    expect(names).toContain('/add-dir');
     expect(names).toContain('/doctor');
     expect(names).toContain('/rewind');
     expect(names).toContain('/agents');
     expect(names).toContain('/branch');
     expect(names).toContain('/mcp');
-    expect(names).toContain('/plugin');
-    expect(names).toContain('/reload-plugins');
     expect(names).toContain('/review');
     expect(names).toContain('/sandbox');
     expect(names).toContain('/security-review');
