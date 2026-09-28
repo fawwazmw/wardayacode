@@ -48,9 +48,7 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     compact: vi.fn().mockResolvedValue('Context compacted: 2 layer(s) applied, ~1,234 tokens remaining.'),
     openUrl: vi.fn().mockResolvedValue('Opened in browser: https://github.com/fawwazmw/wardayacode/issues/new/choose'),
     getProjectRoot: () => '/test',
-    addTask: vi.fn().mockReturnValue(1),
-    listTasks: () => [],
-    clearTasks: vi.fn().mockReturnValue('All tasks cleared.'),
+    getPermissionRules: () => 'Permission mode: default\n\nRules (first match wins):\n  DENY  bash',
     scanPlugins: () => [],
     mcpList: vi.fn().mockResolvedValue('Configured: filesystem'),
     mcpConnect: vi.fn().mockResolvedValue('Connected to filesystem (1 tools).'),
@@ -178,13 +176,6 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('WARDAYA.md');
   });
 
-  it('handles /insights', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/insights', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('Messages: 5');
-  });
-
   it('handles /plan', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/plan', ctx);
@@ -246,21 +237,6 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('No skills directory found');
   });
 
-  it('handles /release-notes', async () => {
-    const ctx = createMockContext({ getVersion: () => '0.5.0' });
-    const result = await handleSlashCommand('/release-notes', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('0.5.0');
-    expect(result.output).toContain('github.com');
-  });
-
-  it('handles /recap', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/recap', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('5 msgs');
-  });
-
   it('handles /copy', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/copy', ctx);
@@ -273,20 +249,6 @@ describe('handleSlashCommand', () => {
     const result = await handleSlashCommand('/feedback', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('github.com');
-  });
-
-  it('handles /tasks', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/tasks', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('No active tasks');
-  });
-
-  it('handles /statusline', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/statusline', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('Status line');
   });
 
   it('handles /hooks', async () => {
@@ -331,13 +293,6 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('fullscreen');
   });
 
-  it('handles /ide', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/ide', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('IDE');
-  });
-
   it('handles /stickers', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/stickers', ctx);
@@ -350,13 +305,7 @@ describe('handleSlashCommand', () => {
     const result = await handleSlashCommand('/permissions', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('Permission mode');
-  });
-
-  it('handles /team-onboarding', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/team-onboarding', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('onboarding');
+    expect(result.output).toContain('DENY');
   });
 
   it('handles /add-dir without arg', async () => {
@@ -378,13 +327,6 @@ describe('handleSlashCommand', () => {
     const result = await handleSlashCommand('/doctor', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('diagnostics');
-  });
-
-  it('handles /rewind', async () => {
-    const ctx = createMockContext();
-    const result = await handleSlashCommand('/rewind', ctx);
-    expect(result.handled).toBe(true);
-    expect(result.output).toContain('Rewind');
   });
 
   it('handles /agents', async () => {
@@ -623,7 +565,6 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/context');
     expect(names).toContain('/resume');
     expect(names).toContain('/init');
-    expect(names).toContain('/insights');
     expect(names).toContain('/plan');
     expect(names).toContain('/stats');
     expect(names).toContain('/fast');
@@ -631,24 +572,17 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/keybindings');
     expect(names).toContain('/color');
     expect(names).toContain('/skills');
-    expect(names).toContain('/release-notes');
-    expect(names).toContain('/recap');
     expect(names).toContain('/copy');
     expect(names).toContain('/feedback');
-    expect(names).toContain('/tasks');
-    expect(names).toContain('/statusline');
     expect(names).toContain('/hooks');
     expect(names).toContain('/memory');
     expect(names).toContain('/anw');
     expect(names).toContain('/effort');
     expect(names).toContain('/tui');
-    expect(names).toContain('/ide');
     expect(names).toContain('/stickers');
     expect(names).toContain('/permissions');
-    expect(names).toContain('/team-onboarding');
     expect(names).toContain('/add-dir');
     expect(names).toContain('/doctor');
-    expect(names).toContain('/rewind');
     expect(names).toContain('/agents');
     expect(names).toContain('/branch');
     expect(names).toContain('/mcp');
