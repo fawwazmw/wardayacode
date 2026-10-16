@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Box, useApp, useInput } from 'ink';
+import { Box, Text, useApp, useInput } from 'ink';
 import fs from 'fs/promises';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync } from 'fs';
 import path from 'path';
+import { streamText, type LanguageModel } from 'ai';
 import type { Agent } from '../agent/index.js';
 import type { Session } from '../session/Session.js';
 import { SessionManager } from '../session/SessionManager.js';
@@ -10,11 +11,14 @@ import type { PermissionMode } from '../types.js';
 import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { UndoManager } from '../tools/UndoManager.js';
 import type { Checkpoint } from '../tools/Checkpoint.js';
+import type { McpManager } from '../mcp/McpManager.js';
 import { ContextManager } from '../context/ContextManager.js';
 import { ChatView, type ChatMessage, type ExpandedOutput } from './ChatView.js';
+import type { SessionMessage } from '../types.js';
 import { InputBar } from './InputBar.js';
 import { StatusBar } from './StatusBar.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
+import { inkColors } from './theme.js';
 import { handleSlashCommand } from './SlashCommands.js';
 import { HelpDialog } from './HelpDialog.js';
 import { WelcomeScreen } from './components/WelcomeScreen.js';
@@ -30,12 +34,22 @@ interface AppProps {
   agent: Agent;
   session: Session;
   model: string;
+  languageModel?: LanguageModel;
   permissionMode: PermissionMode;
   themeMode: 'dark' | 'light';
   undoManager: UndoManager;
   checkpoint: Checkpoint;
   permissions: PermissionSystem;
+  mcpManager?: McpManager;
   version: string;
+  /** Human-readable hook status for /hooks. */
+  hooksInfo: () => Promise<string>;
+  /** Trust the current project's hooks and activate them. */
+  trustHooks: () => Promise<string>;
+  maxTokens: number;
+  temperature: number;
+  maxRetries: number;
+  maxSteps: number;
   initialPrompt?: string;
 }
 
@@ -46,19 +60,80 @@ interface PendingPermission {
   resolve: (decision: 'allow' | 'deny' | 'always') => void;
 }
 
+/** Rebuild the agent context from a loaded session transcript (text + tools). */
+function seedContextFromMessages(ctx: ContextManager, msgs: SessionMessage[]): void {
+  ctx.clear();
+  for (const m of msgs) {
+    if (m.type === 'tool_use' || m.type === 'tool_result') {
+      ctx.addMessage({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        type: m.type,
+        ...(m.toolName ? { toolName: m.toolName } : {}),
+        ...(m.toolInput ? { toolInput: m.toolInput } : {}),
+        ...(m.toolResult ? { toolResult: m.toolResult } : {}),
+        ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
+        timestamp: m.timestamp,
+      });
+    } else if (m.role === 'user' || m.role === 'assistant') {
+      ctx.addMessage({ id: m.id, role: m.role, content: m.content, timestamp: m.timestamp });
+    }
+  }
+}
+
+/** Build the display transcript (text turns + tool calls) from a session. */
+function toDisplayMessages(msgs: SessionMessage[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  for (const m of msgs) {
+    if (m.type === 'tool_use') {
+      out.push({
+        type: 'tool_call',
+        toolName: m.toolName ?? 'unknown',
+        args: m.toolInput ?? {},
+        ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
+      });
+    } else if (m.type === 'tool_result') {
+      for (let i = out.length - 1; i >= 0; i--) {
+        const call = out[i]!;
+        if (call.type !== 'tool_call' || call.result) continue;
+        const matches = m.toolCallId ? call.toolCallId === m.toolCallId : call.toolName === m.toolName;
+        if (matches) {
+          call.result = m.toolResult ?? { success: false };
+          break;
+        }
+      }
+    } else if (m.role === 'user' || m.role === 'assistant') {
+      out.push({ type: 'text', role: m.role, content: m.content });
+    }
+  }
+  return out;
+}
+
 export function App({
   agent,
-  session,
+  session: initialSession,
   model,
+  languageModel,
   permissionMode: initialPermissionMode,
   themeMode: initialThemeMode,
   undoManager,
   checkpoint,
   permissions,
+  mcpManager,
   version,
+  hooksInfo,
+  trustHooks,
+  maxTokens,
+  temperature,
+  maxRetries,
+  maxSteps,
   initialPrompt,
 }: AppProps): React.ReactElement {
   const { exit } = useApp();
+  // The active session can be swapped at runtime by /resume, so it lives in
+  // state rather than being read straight from props.
+  const [session, setSession] = useState<Session>(initialSession);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streamingText, setStreamingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -70,30 +145,13 @@ export function App({
   const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>(initialPermissionMode);
   const [themeMode, setThemeMode] = useState(initialThemeMode);
   const [sessionName, setSessionName] = useState('');
-  const [fastMode, setFastMode] = useState(false);
-  const [colorValue, setColorValue] = useState('accent');
   const [effortLevel, setEffortLevel] = useState('medium');
-  const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
-  const [sandboxEnabled, setSandboxEnabled] = useState(false);
-  const sandboxRef = useRef(sandboxEnabled);
-  sandboxRef.current = sandboxEnabled;
-  const [tasks, setTasks] = useState<{ id: number; desc: string; status: string }[]>([]);
-  const taskIdCounter = useRef(0);
+  const [pendingMcp, setPendingMcp] = useState<{ name: string; command: string; resolve: (ok: boolean) => void } | null>(null);
   const sessionNameRef = useRef(sessionName);
   sessionNameRef.current = sessionName;
-  const fastModeRef = useRef(fastMode);
-  fastModeRef.current = fastMode;
-  const colorValueRef = useRef(colorValue);
-  colorValueRef.current = colorValue;
   const effortLevelRef = useRef(effortLevel);
   effortLevelRef.current = effortLevel;
-  const directoriesRef = useRef(directories);
-  directoriesRef.current = directories;
-  const tasksRef = useRef(tasks);
-  tasksRef.current = tasks;
-  const sandboxEnabledRef = useRef(sandboxEnabled);
-  sandboxEnabledRef.current = sandboxEnabled;
   const abortRef = useRef<AbortController | null>(null);
 
   // Full output of the most-recent tool call, toggled by ctrl+o. It renders in
@@ -126,12 +184,20 @@ export function App({
           const content = msg.result.success
             ? msg.result.content ?? ''
             : msg.result.error ?? msg.result.content ?? '';
-          if (content.trim() === '') return;
+          if (content.trim() === '') continue;
           setExpanded({ toolName: msg.toolName, content });
           return;
         }
       }
     }
+  });
+
+  // Answers the MCP connect confirmation prompt. Gated on pendingMcp so it
+  // never swallows typing while no confirmation is active.
+  useInput((input) => {
+    if (!pendingMcp) return;
+    if (input === 'y' || input === 'Y') handleMcpDecision(true);
+    if (input === 'n' || input === 'N') handleMcpDecision(false);
   });
 
   const addSystemMessage = useCallback((content: string) => {
@@ -160,6 +226,17 @@ export function App({
     });
   }, [permissions]);
 
+  // Seed the transcript and agent context from an existing session when the
+  // process was launched with --resume (the in-session /resume path seeds its
+  // own state, but startup resume previously showed an empty conversation).
+  React.useEffect(() => {
+    const existing = initialSession.getMessages();
+    if (existing.length === 0) return;
+
+    seedContextFromMessages(contextManagerRef.current, existing);
+    setMessages(toDisplayMessages(existing));
+  }, [initialSession]);
+
   const handlePermissionDecision = useCallback((decision: 'allow' | 'deny' | 'always') => {
     if (pendingPermission) {
       pendingPermission.resolve(decision);
@@ -167,20 +244,31 @@ export function App({
     }
   }, [pendingPermission]);
 
+  const handleMcpDecision = useCallback((ok: boolean) => {
+    if (pendingMcp) {
+      pendingMcp.resolve(ok);
+      setPendingMcp(null);
+    }
+  }, [pendingMcp]);
+
   const handleInterrupt = useCallback(() => {
     if (pendingPermission) {
       pendingPermission.resolve('deny');
       setPendingPermission(null);
       return;
     }
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
-      setIsLoading(false);
-      setStreamingText('');
-      addSystemMessage('Operation cancelled.');
+    if (pendingMcp) {
+      pendingMcp.resolve(false);
+      setPendingMcp(null);
+      return;
     }
-  }, [addSystemMessage, pendingPermission]);
+    if (abortRef.current) {
+      // Abort the in-flight request; the run's catch/finally surfaces the
+      // cancellation and clears loading state. Do NOT flip isLoading here, or
+      // a new prompt could start a second concurrent run.
+      abortRef.current.abort();
+    }
+  }, [pendingPermission, pendingMcp]);
 
   const handleSubmit = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -247,6 +335,10 @@ export function App({
       clearMessages: () => {
         setMessages([]);
         setExpanded(null);
+        // Actually drop the conversation context too — otherwise the next
+        // prompt still carries every "cleared" turn to the model.
+        contextManagerRef.current.clear();
+        setTokenUsage({ input: 0, output: 0 });
       },
       setPermissionMode: (mode) => {
         setCurrentPermissionMode(mode);
@@ -295,21 +387,60 @@ export function App({
         const loaded = new SessionClass(match.id, process.cwd(), currentPermissionMode);
         await loaded.load();
         const msgs = loaded.getMessages();
-        setMessages(msgs.map(m => ({
-          type: 'text' as const,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })));
+
+        // Rebuild the live context (text + tool turns) so the agent carries the
+        // resumed history into the next turn.
+        const ctx = contextManagerRef.current;
+        seedContextFromMessages(ctx, msgs);
+
+        // Swap the active session so subsequent appends land in the resumed
+        // transcript rather than the session that was open at startup.
+        setSession(loaded);
+        setMessages(toDisplayMessages(msgs));
         setTokenUsage({ input: 0, output: 0 });
+        sessionStartRef.current = Date.now();
         return `Resumed session ${match.id.slice(0, 8)} (${msgs.length} messages)`;
       },
       initWardayaDoc: async () => {
         const cwd = process.cwd();
         const filepath = path.join(cwd, 'WARDAYA.md');
+        // Discover project commands from package.json
+        const commands: Record<string, string> = {};
+        try {
+          const pkgPath = path.join(cwd, 'package.json');
+          if (existsSync(pkgPath)) {
+            const pkgStr = await fs.readFile(pkgPath, 'utf-8');
+            const pkg = JSON.parse(pkgStr) as Record<string, unknown>;
+            const scripts = pkg.scripts as Record<string, string> | undefined;
+            if (scripts) {
+              // Pick the most relevant scripts for the doc
+              for (const key of ['dev', 'start', 'build', 'test', 'test:run', 'lint', 'type-check', 'format']) {
+                if (scripts[key]) commands[key] = scripts[key]!;
+              }
+            }
+            // Detect test runner from devDependencies
+            const deps = { ...(pkg.dependencies as Record<string, string> ?? {}), ...(pkg.devDependencies as Record<string, string> ?? {}) };
+            if (deps.vitest && !commands['test:run']) commands['test:run'] = 'vitest run';
+            if (deps.jest && !commands['test']) commands['test'] = 'jest';
+          }
+        } catch { /* not a Node project */ }
+
+        // Check for Python/Rust/Go project indicators
+        let testHint = '';
+        if (!commands['test']) {
+          for (const f of ['pyproject.toml', 'Cargo.toml', 'go.mod']) {
+            if (existsSync(path.join(cwd, f))) testHint = `\n## Testing\n\nRefer to ${f} for test commands.`;
+          }
+        }
+
+        const commandBlock = Object.keys(commands).length > 0
+          ? JSON.stringify(commands, null, 2)
+          : 'Refer to your project for available commands.';
+
         const content = [
           '# WARDAYA.md',
           '',
-          'This file was auto-generated by WarayaCode to document project context',
+          'This file was auto-generated by WardayaCode to document project context',
           'for AI-assisted development sessions.',
           '',
           '## Project',
@@ -319,8 +450,9 @@ export function App({
           '## Commands',
           '',
           '```json',
-          JSON.stringify({ build: 'npm run build', test: 'npm run test:run', lint: 'npm run lint' }, null, 2),
+          commandBlock,
           '```',
+          testHint,
           '',
           '## Recent Activity',
           '',
@@ -330,21 +462,25 @@ export function App({
         await fs.writeFile(filepath, content, 'utf-8');
         return `WARDAYA.md created in ${cwd}`;
       },
-      getFastMode: () => fastModeRef.current,
-      setFastMode: (fast) => setFastMode(fast),
-      getColor: () => colorValueRef.current,
-      setColor: (color) => setColorValue(color),
       getEffort: () => effortLevelRef.current,
-      setEffort: (level) => setEffortLevel(level),
-      setTuiRenderer: (renderer: string) => `TUI renderer set to: ${renderer}`,
+      setEffort: (level) => {
+        setEffortLevel(level);
+        if ('setEffort' in agent) {
+          (agent as unknown as { setEffort: (l: string) => void }).setEffort(level);
+        }
+      },
+      setTuiRenderer: (renderer: string) => {
+        return `TUI renderer "${renderer}" is not available. Ink's render() only supports the default terminal renderer.`;
+      },
       getAgentConfigSummary: () => {
         return [
           `Model:        ${model}`,
-          `Max tokens:   4096`,
-          `Temperature:  0`,
-          `Max steps:    25`,
-          `Max retries:  3`,
-          `Fast mode:    ${fastMode ? 'on' : 'off'}`,
+          `Permission:   ${currentPermissionMode}`,
+          `Effort:       ${effortLevelRef.current}`,
+          `Max tokens:   ${maxTokens}`,
+          `Temperature:  ${temperature}`,
+          `Max steps:    ${maxSteps}`,
+          `Max retries:  ${maxRetries}`,
         ].join('\n');
       },
       createBranch: async (name: string) => {
@@ -366,40 +502,53 @@ export function App({
           return `Failed to create branch: ${name}.`;
         }
       },
-      listPlugins: () => {
-        // Check for plugins directory
-        return [];
-      },
-      reloadPlugins: async () => {
-        return 'Plugins reloaded.';
-      },
-      scanPlugins: () => {
-        try {
-          const pluginDir = path.join(process.cwd(), '.wardayacode', 'plugins');
-          if (!existsSync(pluginDir)) return [];
-          const files = readdirSync(pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.mjs'));
-          return files.map(f => path.join('.wardayacode', 'plugins', f));
-        } catch {
-          return [];
+      mcpList: async () => {
+        if (!mcpManager) return 'MCP not available in this context.';
+        const names = mcpManager.getConfigNames();
+        if (names.length === 0) {
+          return 'No MCP servers configured.\nAdd .mcp.json or .wardayacode/mcp/*.json.';
         }
+        return `Configured MCP servers:\n  ${names.join('\n  ')}\nUse /mcp connect <name> to connect.`;
       },
-      scanMcpConfigs: () => {
-        try {
-          const mcpDir = path.join(process.cwd(), '.wardayacode', 'mcp');
-          if (!existsSync(mcpDir)) return [];
-          const files = readdirSync(mcpDir).filter(f => f.endsWith('.json'));
-          return files.map(f => path.join('.wardayacode', 'mcp', f));
-        } catch {
-          return [];
-        }
+      mcpConnect: async (name: string) => {
+        if (!mcpManager) return 'MCP not available in this context.';
+        const command = mcpManager.getServerCommand(name);
+        if (command === undefined) return `Unknown MCP server: ${name}`;
+        const status = mcpManager.getStatus().find(s => s.name === name);
+        if (status?.status === 'connected') return `Server "${name}" is already connected.`;
+
+        // Security gate: MCP configs (`.mcp.json` / `.wardayacode/mcp/*.json`)
+        // can come from a cloned repo, so never spawn a server process without
+        // surfacing the exact command and getting explicit approval.
+        const approved = await new Promise<boolean>(resolve => {
+          setPendingMcp({ name, command, resolve });
+        });
+        if (!approved) return 'MCP connect cancelled.';
+        return mcpManager.connect(name);
       },
-      getSandboxStatus: () => {
-        return `Sandbox: ${sandboxEnabled ? 'enabled' : 'disabled'}\nSandbox isolates file access to the project directory.\nEnable with /sandbox enable.`;
+      mcpDisconnect: async (name: string) => {
+        if (!mcpManager) return 'MCP not available in this context.';
+        return mcpManager.disconnect(name);
       },
-      getSandboxEnabled: () => sandboxRef.current,
-      setSandboxEnabled: (enabled: boolean) => setSandboxEnabled(enabled),
+      mcpStatus: async () => {
+        if (!mcpManager) return 'MCP not available in this context.';
+        const statuses = mcpManager.getStatus();
+        if (statuses.length === 0) return 'No MCP servers configured.';
+        const lines = statuses.map(s =>
+          `  ${s.name.padEnd(20)} ${s.status === 'connected' ? '✓ connected' : '— disconnected'} (${s.toolCount} tools)`,
+        );
+        return `MCP servers:\n${lines.join('\n')}`;
+      },
+      getHooksInfo: () => hooksInfo(),
+      trustHooks: () => trustHooks(),
+      getSandboxEnabled: () => permissions.isSandboxEnabled(),
+      setSandboxEnabled: (enabled: boolean) => {
+        // Sandbox is a first-class gate in PermissionSystem, independent of the
+        // permission mode, so /mode changes can't silently drop it.
+        permissions.setSandbox(enabled);
+      },
       runSecurityReview: async () => {
-        const d = await checkpoint.getDiff();
+        const d = await checkpoint.getDiffSummary();
         if (!d) return 'No changes to review.';
         const lines = d.split('\n');
         const addedLines = lines.filter(l => l.startsWith('+') && !l.startsWith('+++'));
@@ -418,20 +567,49 @@ export function App({
         output.push(`\nFull diff: ${lines.length} lines`);
         return output.join('\n');
       },
-      getDirectories: () => directoriesRef.current,
-      addDirectory: (dir: string) => {
-        setDirectories(prev => prev.includes(dir) ? prev : [...prev, dir]);
-        return `Added directory: ${dir}`;
-      },
       copyLastResponse: async () => {
         const msgs = messagesRef.current;
+        // Find the last assistant text response
+        let found = '';
         for (let i = msgs.length - 1; i >= 0; i--) {
           const m = msgs[i]!;
           if (m.type === 'text' && m.role === 'assistant' && m.content) {
-            return `Last response: ${m.content.slice(0, 200)}${m.content.length > 200 ? '…' : ''}`;
+            found = m.content;
+            break;
           }
         }
-        return 'No assistant response to copy.';
+        if (!found) return 'No assistant response to copy.';
+
+        // Copy to clipboard using platform-appropriate command.
+        // Pipe via stdin (execSync input) rather than echo + shell pipe to
+        // avoid shell interpretation of metacharacters in the content.
+        const { execSync } = await import('node:child_process');
+        let copied = false;
+        try {
+          if (process.platform === 'darwin') {
+            execSync('pbcopy', { input: found });
+            copied = true;
+          } else if (process.platform === 'win32') {
+            execSync('clip', { input: found });
+            copied = true;
+          } else {
+            // Linux: try xclip, fall back to xsel
+            try {
+              execSync('xclip -selection clipboard', { input: found });
+              copied = true;
+            } catch {
+              execSync('xsel -b', { input: found });
+              copied = true;
+            }
+          }
+        } catch {
+          // clipboard unavailable — fall back to showing the text
+        }
+        if (copied) {
+          const preview = found.slice(0, 80);
+          return `Copied assistant response to clipboard.\n  "${preview}${found.length > 80 ? '…' : ''}"`;
+        }
+        return `No clipboard tool found. Last response:\n${found.slice(0, 500)}${found.length > 500 ? '…' : ''}`;
       },
       getConfigSummary: () => {
         return [
@@ -480,37 +658,60 @@ export function App({
       },
       openUrl: async (url: string) => {
         const { execSync } = await import('node:child_process');
+        // Shell-escape the URL: wrap in single quotes and escape any single quotes inside it
+        const escaped = `'${url.replace(/'/g, "'\\''")}'`;
+        const cmd = process.platform === 'darwin'
+          ? `open ${escaped}`
+          : process.platform === 'win32'
+            ? `start "" ${escaped}`
+            : `xdg-open ${escaped}`;
         try {
-          execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+          execSync(cmd, { stdio: 'ignore' });
           return `Opened in browser: ${url}`;
         } catch {
           return `Open this URL in your browser:\n  ${url}`;
         }
       },
       getProjectRoot: () => process.cwd(),
-      addTask: (desc: string) => {
-        taskIdCounter.current += 1;
-        const id = taskIdCounter.current;
-        setTasks(prev => [...prev, { id, desc, status: 'running' }]);
-        return id;
-      },
-      listTasks: () => tasksRef.current,
-      clearTasks: (id?: number) => {
-        if (id === undefined) {
-          setTasks([]);
-          return 'All tasks cleared.';
+      getPermissionRules: () => {
+        const rules = permissions.getRules();
+        const lines = [`Permission mode: ${currentPermissionMode}`, '', 'Rules (first match wins):'];
+        if (rules.length === 0) {
+          lines.push('  (none)');
+        } else {
+          for (const r of rules) {
+            const pattern = r.pattern ? ` pattern=${r.pattern}` : '';
+            const reason = r.reason ? `  — ${r.reason}` : '';
+            lines.push(`  ${r.action.toUpperCase().padEnd(5)} ${r.tool}${pattern}${reason}`);
+          }
         }
-        let found = false;
-        setTasks(prev => prev.filter(t => {
-          if (t.id === id) found = true;
-          return t.id !== id;
-        }));
-        return found ? `Task ${id} cleared.` : `No task with id ${id}.`;
+        const allowList = permissions.getSessionAllowList();
+        if (allowList.length > 0) {
+          lines.push('', `Session allow-list: ${allowList.join(', ')}`);
+        }
+        lines.push('', 'Change mode with /mode; approvals add to the session allow-list.');
+        return lines.join('\n');
       },
       askSideQuestion: async (question: string) => {
-        // For now, side questions are answered via the main agent flow
-        // but tagged so they don't persist in session history.
-        return `Side question: "${question}"\n\nTo get a response, type your question directly in the main chat.`;
+        if (!languageModel) {
+          return 'Side questions require a LanguageModel instance (not available in this context).';
+        }
+        try {
+          const result = streamText({
+            model: languageModel,
+            messages: [
+              { role: 'system', content: 'Answer the following question concisely. This is a side question from a coding session — be direct and helpful.' },
+              { role: 'user', content: question },
+            ],
+            maxTokens: 512,
+            temperature: 0,
+          });
+          const answer = (await result.text) ?? '';
+          return `Side question: "${question}"\n\n${answer}`;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          return `Side question failed: ${msg}`;
+        }
       },
       listOpenPRs: async () => {
         const { execSync } = await import('node:child_process');
@@ -540,11 +741,16 @@ export function App({
     setIsLoading(true);
     setStreamingText('');
 
-    await session.append({
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: text,
-    });
+    try {
+      await session.append({
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: text,
+      });
+    } catch {
+      // A failed disk write must not leave the UI stuck with isLoading=true.
+      addSystemMessage('Warning: failed to save this message to the session file.');
+    }
 
     const ctx = contextManagerRef.current;
     ctx.addCoreMessage('user', text);
@@ -566,39 +772,82 @@ export function App({
       setStreamingText(prev => prev + delta);
     };
 
-    const toolCallStartHandler = ({ toolName, args }: { toolName: string; args: Record<string, unknown> }) => {
+    const toolCallStartHandler = ({ toolName, args, toolCallId }: { toolName: string; args: Record<string, unknown>; toolCallId?: string }) => {
+      const ctxNow = contextManagerRef.current;
+      const message = {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: '',
+        type: 'tool_use' as const,
+        toolName,
+        toolInput: args,
+        ...(toolCallId ? { toolCallId } : {}),
+        timestamp: Date.now(),
+      };
+      ctxNow.addMessage(message);
+      void session.append({ ...message }).catch(() => {});
+
       setMessages(prev => [...prev, {
         type: 'tool_call',
         toolName,
         args,
+        ...(toolCallId ? { toolCallId } : {}),
         startedAt: Date.now(),
       }]);
     };
 
-    const toolCallResultHandler = ({ toolName, result }: { toolName: string; result: { success: boolean; content?: string; error?: string } }) => {
+    const toolCallResultHandler = ({ toolName, result, toolCallId }: { toolName: string; result: { success: boolean; content?: string; error?: string }; toolCallId?: string }) => {
+      const ctxNow = contextManagerRef.current;
+      const resultMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: JSON.stringify(result),
+        type: 'tool_result' as const,
+        toolName,
+        toolResult: result,
+        ...(toolCallId ? { toolCallId } : {}),
+        timestamp: Date.now(),
+      };
+      ctxNow.addMessage(resultMessage);
+      void session.append({ ...resultMessage }).catch(() => {});
+
       setMessages(prev => {
         const updated = [...prev];
         for (let i = updated.length - 1; i >= 0; i--) {
           const msg = updated[i]!;
-          if (msg.type === 'tool_call' && msg.toolName === toolName && !msg.result) {
+          if (msg.type !== 'tool_call' || msg.result) continue;
+          const matches = toolCallId ? msg.toolCallId === toolCallId : msg.toolName === toolName;
+          if (matches) {
             updated[i] = {
               type: 'tool_call',
               toolName: msg.toolName,
               args: msg.args,
               result,
+              ...(msg.toolCallId ? { toolCallId: msg.toolCallId } : {}),
               startedAt: msg.startedAt,
               durationMs: msg.startedAt !== undefined ? Date.now() - msg.startedAt : undefined,
             };
-            break;
+            return updated;
           }
         }
+        // No in-progress call matched (should be rare now that start is always
+        // emitted first). Surface it rather than drop the event.
+        updated.push({
+          type: 'tool_call',
+          toolName,
+          args: {},
+          result,
+          ...(toolCallId ? { toolCallId } : {}),
+          startedAt: Date.now(),
+          durationMs: 0,
+        });
         return updated;
       });
     };
 
     const retryHandler = ({ attempt, maxRetries, delayMs, error }: { attempt: number; maxRetries: number; delayMs: number; error: string }) => {
       const delaySec = (delayMs / 1000).toFixed(1);
-      addSystemMessage(`Retrying (attempt ${attempt + 1}/${maxRetries + 1}) in ${delaySec}s — ${error}`);
+      addSystemMessage(`Retrying (attempt ${attempt}/${maxRetries + 1}) in ${delaySec}s — ${error}`);
     };
 
     const usageHandler = ({ promptTokens, completionTokens }: { promptTokens: number; completionTokens: number; totalTokens: number }) => {
@@ -616,18 +865,20 @@ export function App({
 
     const startedAt = Date.now();
     try {
-      const response = await agent.run(newHistory);
+      const response = await agent.run(newHistory, abortRef.current?.signal);
       const durationMs = Date.now() - startedAt;
 
       setStreamingText('');
-      setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response, durationMs }]);
-      ctx.addCoreMessage('assistant', response);
+      if (response.trim().length > 0) {
+        setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response, durationMs }]);
+        ctx.addCoreMessage('assistant', response);
 
-      await session.append({
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: response,
-      });
+        await session.append({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: response,
+        });
+      }
     } catch (error) {
       setStreamingText('');
       if ((error as Error).name === 'AbortError') {
@@ -645,7 +896,7 @@ export function App({
       abortRef.current = null;
       setIsLoading(false);
     }
-  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions, setExpanded]);
+  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions, mcpManager, setExpanded]);
 
   React.useEffect(() => {
     if (initialPrompt) {
@@ -654,46 +905,65 @@ export function App({
   }, []);
 
   const showWelcome = messages.length === 0 && !streamingText && !isLoading;
+  const colors = inkColors[themeMode];
 
   return (
-    <Box flexDirection="column" height="100%">
-      {showWelcome ? (
-        <WelcomeScreen
-          model={model}
-          permissionMode={currentPermissionMode}
-          sessionId={session.getId()}
-          cwd={process.cwd()}
-          themeMode={themeMode}
-          version={version}
-          latestVersion={updateInfo?.latest}
-          updateAvailable={updateInfo?.updateAvailable ?? false}
-        />
-      ) : (
-        <ChatView
-          messages={messages}
-          streamingText={streamingText}
-          themeMode={themeMode}
-          expandedOutput={expandedOutput}
-        />
-      )}
+    <Box flexDirection="column" minHeight="100%">
+      <Box flexGrow={1}>
+        {showWelcome ? (
+          <WelcomeScreen
+            model={model}
+            permissionMode={currentPermissionMode}
+            sessionId={session.getId()}
+            cwd={process.cwd()}
+            themeMode={themeMode}
+            version={version}
+            latestVersion={updateInfo?.latest}
+            updateAvailable={updateInfo?.updateAvailable ?? false}
+          />
+        ) : (
+          <ChatView
+            messages={messages}
+            streamingText={streamingText}
+            themeMode={themeMode}
+            resetKey={session.getId()}
+            expandedOutput={expandedOutput}
+          />
+        )}
 
-      {pendingPermission && (
-        <PermissionPrompt
-          toolName={pendingPermission.toolName}
-          args={pendingPermission.args}
-          reason={pendingPermission.reason}
-          themeMode={themeMode}
-          onDecision={handlePermissionDecision}
-        />
-      )}
+        {pendingPermission && (
+          <PermissionPrompt
+            toolName={pendingPermission.toolName}
+            args={pendingPermission.args}
+            reason={pendingPermission.reason}
+            themeMode={themeMode}
+            onDecision={handlePermissionDecision}
+          />
+        )}
 
-      {showHelp && (
-        <HelpDialog themeMode={themeMode} onClose={() => setShowHelp(false)} />
-      )}
+        {pendingMcp && (
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor={colors.accent}
+            paddingX={2}
+            paddingY={1}
+            marginX={1}
+          >
+            <Text bold>Connect to MCP server "{pendingMcp.name}"?</Text>
+            <Text color={colors.muted}>Command: {pendingMcp.command}</Text>
+            <Text color={colors.muted}>(y)es / (n)o</Text>
+          </Box>
+        )}
+
+        {showHelp && (
+          <HelpDialog themeMode={themeMode} onClose={() => setShowHelp(false)} />
+        )}
+      </Box>
 
       <InputBar
         onSubmit={handleSubmit}
-        isLoading={isLoading || !!pendingPermission}
+        isLoading={isLoading || !!pendingPermission || !!pendingMcp}
         inputDisabled={showHelp}
         themeMode={themeMode}
         onInterrupt={handleInterrupt}

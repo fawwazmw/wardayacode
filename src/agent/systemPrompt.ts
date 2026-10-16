@@ -1,8 +1,11 @@
 import { gatherProjectContext, formatProjectContext } from '../context/ProjectContext.js';
+import { formatSkillsForPrompt } from '../extensibility/skillLoader.js';
+import type { Skill } from '../types.js';
 
-export async function buildSystemPrompt(cwd: string): Promise<string> {
+export async function buildSystemPrompt(cwd: string, skills: Array<Skill & { source?: string }> = []): Promise<string> {
   const projectInfo = await gatherProjectContext(cwd);
   const projectContext = formatProjectContext(projectInfo);
+  const skillsContext = formatSkillsForPrompt(skills);
 
   return `You are wardayacode, an AI coding assistant running in the user's terminal.
 
@@ -24,6 +27,7 @@ CRITICAL — working directory:
   above verbatim.
 
 ${projectContext}
+${skillsContext}
 
 You have access to tools for reading, writing, editing files, running shell commands, and searching the codebase. Use them proactively to understand context before making changes.
 

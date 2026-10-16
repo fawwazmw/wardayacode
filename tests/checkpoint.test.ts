@@ -109,10 +109,33 @@ describe('Checkpoint', () => {
         .mockReturnValueOnce(makeProcSuccess('true'))        // isGitRepo
         .mockReturnValueOnce(makeProcSuccess(' M src/a.ts')) // status
         .mockReturnValueOnce(makeProcSuccess(''))            // stash push
-        .mockReturnValueOnce(makeProcSuccess(''));            // stash pop
+        .mockReturnValueOnce(makeProcSuccess('stash@{0}: On main: wardayacode: test')) // stash list
+        .mockReturnValueOnce(makeProcSuccess(''));            // stash pop stash@{0}
 
       await checkpoint.createCheckpoint('test');
       expect(await checkpoint.rollback()).toBe(true);
+    });
+
+    it('pops the wardayacode stash even when a newer user stash exists', async () => {
+      (spawn as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(makeProcSuccess('true'))        // isGitRepo
+        .mockReturnValueOnce(makeProcSuccess(' M src/a.ts')) // status
+        .mockReturnValueOnce(makeProcSuccess(''))            // stash push
+        .mockReturnValueOnce(
+          makeProcSuccess(
+            'stash@{0}: On main: user wip\nstash@{1}: On main: wardayacode: test',
+          ),
+        ) // stash list
+        .mockReturnValueOnce(makeProcSuccess(''));            // stash pop stash@{1}
+
+      await checkpoint.createCheckpoint('test');
+      expect(await checkpoint.rollback()).toBe(true);
+
+      const spawnMock = spawn as unknown as ReturnType<typeof vi.fn>;
+      const popCall = spawnMock.mock.calls.find(
+        call => Array.isArray(call[1]) && call[1][0] === 'stash' && call[1][1] === 'pop',
+      );
+      expect(popCall?.[1]).toEqual(['stash', 'pop', 'stash@{1}']);
     });
   });
 
@@ -134,8 +157,8 @@ describe('Checkpoint', () => {
   });
 
   describe('getDiff()', () => {
-    it('returns git diff --stat output', async () => {
-      mockGitProcess(' src/foo.ts | 2 +-\n 1 file changed', '', 0);
+    it('returns full git diff output', async () => {
+      mockGitProcess('diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-hello\n+world\n', '', 0);
       const diff = await checkpoint.getDiff();
       expect(diff).toContain('src/foo.ts');
     });
@@ -147,17 +170,11 @@ describe('Checkpoint', () => {
     });
   });
 
-  describe('getDetailedDiff()', () => {
-    it('returns git diff output', async () => {
-      mockGitProcess('diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-hello\n+world\n', '', 0);
-      const diff = await checkpoint.getDetailedDiff();
-      expect(diff).toContain('src/foo.ts');
-    });
-
-    it('returns empty string on error', async () => {
-      mockGitError('failed');
-      const diff = await checkpoint.getDetailedDiff();
-      expect(diff).toBe('');
+  describe('getDiffSummary()', () => {
+    it('returns diff stat output', async () => {
+      mockGitProcess(' src/foo.ts | 2 +-\n 1 file changed', '', 0);
+      const summary = await checkpoint.getDiffSummary();
+      expect(summary).toContain('src/foo.ts');
     });
   });
 });

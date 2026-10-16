@@ -32,6 +32,14 @@ describe('BashTool', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('Blocked');
   });
+
+  it('does not flag harmless commands containing the word "format"', async () => {
+    const { isDestructive } = await import('../src/tools/BashTool.js');
+    expect(isDestructive('npm run format')).toBeNull();
+    expect(isDestructive('prettier --write .')).toBeNull();
+    expect(isDestructive('rm -rf /')).not.toBeNull();
+    expect(isDestructive('format C:')).not.toBeNull();
+  });
 });
 
 // ─── GrepTool ──────────────────────────────────────────────────────────────

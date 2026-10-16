@@ -32,7 +32,7 @@ describe('UndoManager', () => {
     expect(restored).toBe('original content');
   });
 
-  it('handles new file (stores empty)', async () => {
+  it('removes a newly created file on undo', async () => {
     const manager = new UndoManager();
     const filePath = join(TEST_DIR, 'new-file.txt');
 
@@ -41,9 +41,9 @@ describe('UndoManager', () => {
 
     const result = await manager.undo();
     expect(result).not.toBeNull();
+    expect(result!.filePath).toBe(filePath);
 
-    const restored = await readFile(filePath, 'utf-8');
-    expect(restored).toBe('');
+    await expect(readFile(filePath, 'utf-8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('returns null when nothing to undo', async () => {

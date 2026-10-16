@@ -66,6 +66,13 @@ export class ToolRegistry {
   }
 
   /**
+   * Remove a registered tool
+   */
+  unregister(name: string): void {
+    this.tools.delete(name);
+  }
+
+  /**
    * Check if tool exists
    */
   has(name: string): boolean {

@@ -5,6 +5,7 @@ import { render } from 'ink';
 import React from 'react';
 import chalk from 'chalk';
 import { createInterface } from 'node:readline/promises';
+import { type LanguageModel } from 'ai';
 import {
   loadConfig,
   setProviderApiKey,
@@ -17,6 +18,11 @@ import { logger } from './utils/logger.js';
 import { createProvider } from './providers/index.js';
 import { ToolRegistry, registerCoreTools, UndoManager } from './tools/index.js';
 import { PermissionSystem } from './permissions/PermissionSystem.js';
+import { McpManager } from './mcp/McpManager.js';
+import { HookSystem } from './extensibility/HookSystem.js';
+import { HookRuntime } from './extensibility/hookLoader.js';
+import { SkillSystem } from './extensibility/SkillSystem.js';
+import { loadSkills } from './extensibility/skillLoader.js';
 import { Agent } from './agent/index.js';
 import { buildSystemPrompt } from './agent/systemPrompt.js';
 import { Session } from './session/Session.js';
@@ -232,6 +238,20 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
   });
 
+  // Reject unparseable/invalid numerics up front: a NaN maxRetries silently
+  // skips the run loop, and NaN tokens/temperature reach the provider.
+  const numericChecks: Array<[string, number | undefined, (n: number) => boolean]> = [
+    ['--max-retries', config.maxRetries, (n) => Number.isInteger(n) && n >= 0],
+    ['--max-tokens', config.maxTokens, (n) => Number.isFinite(n) && n > 0],
+    ['--temperature', config.temperature !== undefined ? config.temperature : undefined, (n) => Number.isFinite(n) && n >= 0 && n <= 2],
+  ];
+  for (const [flag, value, valid] of numericChecks) {
+    if (value !== undefined && !valid(value)) {
+      console.error(chalk.red(`Invalid value for ${flag}: ${value}`));
+      process.exit(1);
+    }
+  }
+
   const model = createProvider({
     provider: config.provider,
     model: config.model,
@@ -247,20 +267,25 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   registerCoreTools(toolRegistry, undoManager);
 
   const permissions = new PermissionSystem(config.permissionMode);
+  const hooks = new HookSystem();
 
   const projectRoot = process.cwd();
-  const systemPrompt = options.systemPrompt ?? config.systemPrompt ?? await buildSystemPrompt(projectRoot);
 
-  const agent = new Agent({
-    model,
-    toolRegistry,
-    permissions,
-    systemPrompt,
-    maxTokens: config.maxTokens,
-    temperature: config.temperature,
-    maxRetries: config.maxRetries,
-    cwd: projectRoot,
-  });
+  // Discover and register hook scripts. Project hooks stay inactive until the
+  // project is explicitly trusted via `/hooks trust`.
+  const hookRuntime = new HookRuntime(hooks, projectRoot);
+  await hookRuntime.activate();
+
+  // Load user-defined skills and expose them to the agent via the system prompt.
+  const skillSystem = new SkillSystem();
+  for (const skill of await loadSkills(projectRoot)) {
+    skillSystem.register(skill);
+  }
+
+  const mcpManager = new McpManager(toolRegistry);
+  await mcpManager.loadConfig(projectRoot);
+
+  const systemPrompt = options.systemPrompt ?? config.systemPrompt ?? await buildSystemPrompt(projectRoot, skillSystem.list());
 
   const checkpoint = new Checkpoint(projectRoot);
 
@@ -268,8 +293,25 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     ? await loadSession(options.resume, projectRoot, config.permissionMode)
     : await Session.create(projectRoot, config.permissionMode);
 
+  const agent = new Agent({
+    model,
+    toolRegistry,
+    permissions,
+    hookSystem: hooks,
+    systemPrompt,
+    maxTokens: config.maxTokens,
+    temperature: config.temperature,
+    maxRetries: config.maxRetries,
+    cwd: projectRoot,
+    sessionId: session.getId(),
+  });
+
   logger.init(session.getId());
   process.on('exit', () => logger.close());
+  // Best-effort synchronous kill of any MCP server child processes on abrupt
+  // exit (SIGINT/SIGTERM/process.exit) — async disconnectAll runs in the TUI
+  // and plain-text teardown paths below.
+  process.on('exit', () => mcpManager.killAllSync());
 
   const currentVersion = getCurrentVersion();
 
@@ -277,19 +319,29 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     // Ink owns the terminal — route logs to the file only so warn/error lines
     // don't corrupt the frame or duplicate messages the UI already shows.
     logger.setConsoleOutput(false);
-    runTUI(agent, session, config, undoManager, checkpoint, permissions, currentVersion, initialPrompt);
+    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, hookRuntime, currentVersion, initialPrompt);
   } else {
-    await runPlainText(agent, session, permissions, currentVersion, initialPrompt);
+    await runPlainText(agent, session, permissions, mcpManager, currentVersion, initialPrompt);
   }
 }
 
 function runTUI(
   agent: Agent,
   session: Session,
-  config: { model: string; permissionMode: PermissionMode; theme: 'dark' | 'light' },
+  config: {
+    model: string;
+    permissionMode: PermissionMode;
+    theme: 'dark' | 'light';
+    maxTokens: number;
+    temperature: number;
+    maxRetries: number;
+  },
+  languageModel: LanguageModel,
   undoManager: UndoManager,
   checkpoint: Checkpoint,
   permissions: PermissionSystem,
+  mcpManager: McpManager,
+  hookRuntime: HookRuntime,
   version: string,
   initialPrompt?: string
 ): void {
@@ -305,19 +357,32 @@ function runTUI(
         agent,
         session,
         model: config.model,
+        languageModel,
         permissionMode: config.permissionMode,
         themeMode: config.theme,
         undoManager,
         checkpoint,
         permissions,
+        mcpManager,
+        hooksInfo: () => hookRuntime.status(),
+        trustHooks: async () => {
+          await hookRuntime.trustProject();
+          return `Project hooks trusted. ${hookRuntime.getScripts().filter(s => s.trusted).length} hook(s) active.`;
+        },
         version,
+        maxTokens: config.maxTokens,
+        temperature: config.temperature,
+        maxRetries: config.maxRetries,
+        // Agent uses its default maxSteps here; cli.ts never overrides it.
+        maxSteps: 25,
         initialPrompt,
       })
     )
   );
 
-  waitUntilExit().then(() => {
+  waitUntilExit().then(async () => {
     disableKittyKeyboard();
+    await mcpManager.disconnectAll();
     process.exit(0);
   });
 }
@@ -326,6 +391,7 @@ async function runPlainText(
   agent: Agent,
   session: Session,
   permissions: PermissionSystem,
+  mcpManager: McpManager,
   version: string,
   initialPrompt?: string
 ): Promise<void> {
@@ -356,8 +422,13 @@ async function runPlainText(
     process.exit(0);
   });
 
-  // In plain text mode, auto-approve all tools (no interactive prompt available)
-  permissions.setMode('auto');
+  // In plain text mode, ensure no prompt handler is registered (can't prompt in non-TUI),
+  // so any denied tool gets hard-denied rather than prompting indefinitely.
+  // The user's configured permission mode is preserved.
+  permissions.setPromptHandler(async () => {
+    console.error(chalk.yellow('[Permission denied: no TUI prompt available in --no-tui mode]'));
+    return 'deny';
+  });
 
   await session.append({
     id: crypto.randomUUID(),
@@ -396,8 +467,11 @@ async function runPlainText(
     process.stdout.write('\n');
   } catch (error) {
     console.error(chalk.red('\nAgent error:'), error instanceof Error ? error.message : error);
+    await mcpManager.disconnectAll();
     process.exit(1);
   }
+
+  await mcpManager.disconnectAll();
 }
 
 async function loadSession(

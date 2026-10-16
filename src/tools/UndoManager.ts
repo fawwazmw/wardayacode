@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rm } from 'node:fs/promises';
 
 interface UndoEntry {
   filePath: string;
@@ -6,6 +6,8 @@ interface UndoEntry {
   newContent: string;
   toolName: string;
   timestamp: number;
+  /** False when the file did not exist before the edit (created by write_file). */
+  existed: boolean;
 }
 
 const MAX_UNDO_STACK = 50;
@@ -22,6 +24,7 @@ export class UndoManager {
         newContent: '',
         toolName,
         timestamp: Date.now(),
+        existed: true,
       });
 
       if (this.stack.length > MAX_UNDO_STACK) {
@@ -35,6 +38,7 @@ export class UndoManager {
         newContent: '',
         toolName,
         timestamp: Date.now(),
+        existed: false,
       });
     }
   }
@@ -54,7 +58,12 @@ export class UndoManager {
     const entry = this.stack.pop();
     if (!entry) return null;
 
-    await writeFile(entry.filePath, entry.previousContent, 'utf-8');
+    if (entry.existed) {
+      await writeFile(entry.filePath, entry.previousContent, 'utf-8');
+    } else {
+      // The edit created the file; undoing means removing it entirely.
+      await rm(entry.filePath, { force: true });
+    }
     return { filePath: entry.filePath, toolName: entry.toolName };
   }
 

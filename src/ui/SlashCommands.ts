@@ -8,7 +8,7 @@ export interface SlashCommandEntry {
 
 export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/help', description: 'Show available commands' },
-  { name: '/status', description: 'Show WardayaCode status including version, model, account, API connectivity, and tool statuses' },
+  { name: '/status', description: 'Show version, model, mode, session, and usage stats' },
   { name: '/cost', description: 'Show total cost and duration of the current session' },
   { name: '/theme', description: 'Change the theme', args: '<dark|light>' },
   { name: '/export', description: 'Export the current conversation to a file' },
@@ -16,37 +16,24 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/context', description: 'Visualize current context usage stats' },
   { name: '/resume', description: 'Resume a previous conversation', args: '<session-id>' },
   { name: '/init', description: 'Initialize a new WARDAYA.md file with codebase documentation' },
-  { name: '/insights', description: 'Generate a report analyzing your WardayaCode sessions' },
   { name: '/plan', description: 'Switch to plan mode (read-only, no destructive actions)' },
   { name: '/stats', description: 'Show usage statistics and activity for this session' },
-  { name: '/fast', description: 'Toggle fast mode for faster model responses' },
   { name: '/config', description: 'Show current configuration summary' },
   { name: '/keybindings', description: 'Open or create your keybindings configuration file' },
-  { name: '/color', description: 'Set the prompt bar color for this session', args: '<color>' },
   { name: '/skills', description: 'List available skills' },
-  { name: '/release-notes', description: 'View release notes' },
-  { name: '/recap', description: 'Generate a one-line session recap' },
   { name: '/copy', description: "Copy the last response to clipboard", args: '[N]' },
   { name: '/feedback', description: 'Submit feedback about WardayaCode' },
-  { name: '/tasks', description: 'List and manage background tasks' },
-  { name: '/statusline', description: "Set up WardayaCode's status line UI" },
   { name: '/hooks', description: 'View hook configurations for tool events' },
   { name: '/memory', description: 'Edit Wardaya memory files' },
   { name: '/anw', description: 'Ask a quick side question without interrupting the main conversation' },
   { name: '/effort', description: 'Set effort level for model usage', args: '<level>' },
-  { name: '/tui', description: 'Set the terminal UI renderer (default | fullscreen)', args: '<mode>' },
-  { name: '/ide', description: 'Manage IDE integrations and show status' },
+  { name: '/tui', description: 'Set the terminal UI renderer (default only)', args: '<mode>' },
   { name: '/stickers', description: 'Get link to order WardayaCode stickers' },
   { name: '/permissions', description: 'Manage allow & deny tool permission rules' },
-  { name: '/team-onboarding', description: 'Help teammates ramp on WardayaCode with a guide from your usage' },
-  { name: '/add-dir', description: 'Add a new working directory' },
   { name: '/doctor', description: 'Diagnose and verify your WardayaCode installation and settings' },
-  { name: '/rewind', description: 'Restore the code and/or conversation to a previous point' },
   { name: '/agents', description: 'Manage agent configurations' },
   { name: '/branch', description: 'Create a branch of the current conversation at this point', args: '<name>' },
   { name: '/mcp', description: 'Manage MCP servers' },
-  { name: '/plugin', description: 'Manage WardayaCode plugins' },
-  { name: '/reload-plugins', description: 'Activate pending plugin changes in the current session' },
   { name: '/review', description: 'Review a pull request' },
   { name: '/sandbox', description: 'Configure the sandbox' },
   { name: '/security-review', description: 'Complete a security review of the pending changes on the current branch' },
@@ -84,19 +71,12 @@ export interface SlashCommandContext {
   clearMessages: () => void;
   setPermissionMode: (mode: PermissionMode) => void;
   setThemeMode: (mode: 'dark' | 'light') => void;
-  setColor: (color: string) => void;
-  getColor: () => string;
   copyLastResponse: () => Promise<string>;
   setEffort: (level: string) => void;
   getEffort: () => string;
   setTuiRenderer: (renderer: string) => string;
-  getDirectories: () => string[];
-  addDirectory: (dir: string) => string;
   getAgentConfigSummary: () => string;
   createBranch: (name: string) => Promise<string>;
-  listPlugins: () => string[];
-  reloadPlugins: () => Promise<string>;
-  getSandboxStatus: () => string;
   runSecurityReview: () => Promise<string>;
   getSessionId: () => string;
   getSessionName: () => string;
@@ -104,12 +84,12 @@ export interface SlashCommandContext {
   getModel: () => string;
   getVersion: () => string;
   getPermissionMode: () => PermissionMode;
+  /** Human-readable list of the active permission rules. */
+  getPermissionRules: () => string;
   getTokenUsage: () => { input: number; output: number };
   getSessionDuration: () => number;
   getMessageCount: () => number;
   getContextStats: () => { messageCount: number; estimatedTokens: number; shouldCompact: boolean };
-  getFastMode: () => boolean;
-  setFastMode: (fast: boolean) => void;
   getConfigSummary: () => string;
   openKeybindings: () => Promise<string>;
   exportSession: () => Promise<string>;
@@ -124,16 +104,18 @@ export interface SlashCommandContext {
   compact: () => Promise<string>;
   openUrl: (url: string) => Promise<string>;
   getProjectRoot: () => string;
-  /** Add a background task and return an ID. */
-  addTask: (description: string) => number;
-  /** List all tasks with status. Returns [{id, desc, status}]. */
-  listTasks: () => { id: number; desc: string; status: string }[];
-  /** Clear a task by id, or all tasks if no id. */
-  clearTasks: (id?: number) => string;
-  /** Scan the project for plugin files. Returns file paths relative to project root. */
-  scanPlugins: () => string[];
-  /** Scan the project for MCP configs. Returns file paths relative to project root. */
-  scanMcpConfigs: () => string[];
+  /** List configured MCP servers. */
+  mcpList: () => Promise<string>;
+  /** Connect an MCP server by name. */
+  mcpConnect: (name: string) => Promise<string>;
+  /** Disconnect an MCP server by name. */
+  mcpDisconnect: (name: string) => Promise<string>;
+  /** Show MCP server connection status. */
+  mcpStatus: () => Promise<string>;
+  /** Human-readable hook status. */
+  getHooksInfo: () => Promise<string>;
+  /** Trust the current project's hooks and activate them. */
+  trustHooks: () => Promise<string>;
   /** Enable or disable the sandbox. */
   setSandboxEnabled: (enabled: boolean) => void;
   /** Get sandbox enabled state. */
@@ -210,13 +192,16 @@ export async function handleSlashCommand(
 
     case '/status': {
       const sUsage = ctx.getTokenUsage();
+      const sDur = formatDuration(ctx.getSessionDuration());
       const lines = [
         `Version:  ${ctx.getVersion()}`,
         `Model:    ${ctx.getModel()}`,
         `Mode:     ${ctx.getPermissionMode()}`,
-        `Session:  ${ctx.getSessionId()}`,
+        `Effort:   ${ctx.getEffort()}`,
+        `Session:  ${ctx.getSessionId().slice(0, 8)}`,
+        `Uptime:   ${sDur}`,
         `Messages: ${ctx.getMessageCount()}`,
-        `Tokens:   ~${sUsage.input} in / ~${sUsage.output} out`,
+        `Tokens:   ~${sUsage.input.toLocaleString()} in / ~${sUsage.output.toLocaleString()} out`,
       ];
       return { handled: true, output: lines.join('\n') };
     }
@@ -291,11 +276,6 @@ export async function handleSlashCommand(
     case '/init':
       return { handled: true, output: await ctx.initWardayaDoc() };
 
-    case '/insights': {
-      const iUsage = ctx.getTokenUsage();
-      return { handled: true, output: `Session insights:\n  Messages: ${ctx.getMessageCount()}\n  Tokens in: ~${iUsage.input}\n  Tokens out: ~${iUsage.output}\n  Model: ${ctx.getModel()}\n  Duration: ${formatDuration(ctx.getSessionDuration())}` };
-    }
-
     case '/plan':
       ctx.setPermissionMode('plan');
       return { handled: true, output: 'Switched to plan mode (read-only). Use /mode to change.' };
@@ -309,7 +289,6 @@ export async function handleSlashCommand(
         output: [
           `Model:     ${modelShort}`,
           `Mode:      ${ctx.getPermissionMode()}`,
-          `Fast:      ${ctx.getFastMode() ? 'on' : 'off'}`,
           `Messages:  ${ctx.getMessageCount()}`,
           `Tokens in: ~${stUsage.input.toLocaleString()}`,
           `Tokens out:~${stUsage.output.toLocaleString()}`,
@@ -318,53 +297,20 @@ export async function handleSlashCommand(
       };
     }
 
-    case '/fast': {
-      const newFast = !ctx.getFastMode();
-      ctx.setFastMode(newFast);
-      return { handled: true, output: `Fast mode ${newFast ? 'enabled' : 'disabled'}.` };
-    }
-
     case '/config':
       return { handled: true, output: ctx.getConfigSummary() };
 
     case '/keybindings':
       return { handled: true, output: await ctx.openKeybindings() };
 
-    case '/color': {
-      if (!arg) {
-        return { handled: true, output: `Current color: ${ctx.getColor()}\nUsage: /color <name>` };
-      }
-      ctx.setColor(arg);
-      return { handled: true, output: `Color set to: ${arg}` };
-    }
-
     case '/skills': {
-      const { existsSync, readdirSync } = await import('fs');
-      const { join } = await import('path');
-      const root = ctx.getProjectRoot();
-      const skillsDir = join(root, '.wardayacode', 'skills');
-      const skills: string[] = [];
-      if (existsSync(skillsDir)) {
-        const files = readdirSync(skillsDir).filter(f => f.endsWith('.md') || f.endsWith('.js'));
-        for (const f of files) {
-          skills.push(f.replace(/\.(md|js)$/, ''));
-        }
-      }
+      const { loadSkills } = await import('../extensibility/skillLoader.js');
+      const skills = await loadSkills(ctx.getProjectRoot());
       if (skills.length === 0) {
-        return { handled: true, output: 'Available skills: planning, research, code review, debugging, testing, documentation\nAdd custom skills to .wardayacode/skills/.' };
+        return { handled: true, output: 'No skills found.\nAdd .md files to .wardayacode/skills/ or ~/.config/wardayacode/skills/ to define skills.\nSkills are injected into the agent when relevant.' };
       }
-      return { handled: true, output: `Custom skills:\n  ${skills.join('\n  ')}\n\nBuilt-in skills: planning, research, code review, debugging, testing, documentation` };
-    }
-
-    case '/release-notes': {
-      const v = ctx.getVersion();
-      return { handled: true, output: `WardayaCode v${v}\nSee https://github.com/fawwazmw/wardayacode/releases for release notes.` };
-    }
-
-    case '/recap': {
-      const rDur = formatDuration(ctx.getSessionDuration());
-      const rUsage = ctx.getTokenUsage();
-      return { handled: true, output: `Session: ${ctx.getMessageCount()} msgs, ${rDur}, ~${rUsage.input + rUsage.output} tokens used` };
+      const lines = skills.map(s => `  ${s.name.padEnd(20)} ${s.description}`);
+      return { handled: true, output: `Skills (${skills.length}):\n${lines.join('\n')}\n\nSkills are injected into the agent when relevant.` };
     }
 
     case '/copy':
@@ -373,70 +319,41 @@ export async function handleSlashCommand(
     case '/feedback':
       return { handled: true, output: await ctx.openUrl('https://github.com/fawwazmw/wardayacode/issues/new/choose') };
 
-    case '/tasks': {
-      if (arg === 'clear') {
-        return { handled: true, output: ctx.clearTasks() };
-      }
-      const taskId = arg ? Number(arg) : undefined;
-      if (taskId !== undefined && !Number.isNaN(taskId)) {
-        return { handled: true, output: ctx.clearTasks(taskId) };
-      }
-      const tasks = ctx.listTasks();
-      if (tasks.length === 0) {
-        return { handled: true, output: 'Background tasks:\n  No active tasks.' };
-      }
-      return {
-        handled: true,
-        output: `Background tasks (${tasks.length}):\n${tasks.map(t => `  [${t.id}] ${t.desc} — ${t.status}`).join('\n')}\nUse /tasks <id> to clear a task, /tasks clear to clear all.`,
-      };
-    }
-
-    case '/statusline':
-      return { handled: true, output: `Status line shows:\n  Model:     ${ctx.getModel()}\n  Mode:      ${ctx.getPermissionMode()}\n  Messages:  ${ctx.getMessageCount()}\n  Duration:  ${formatDuration(ctx.getSessionDuration())}\nUse /config to see full configuration.` };
-
     case '/hooks': {
-      const { existsSync, readdirSync } = await import('fs');
-      const { join } = await import('path');
-      const { homedir } = await import('os');
-      const hookDirs = [
-        join(ctx.getProjectRoot(), '.wardayacode', 'hooks'),
-        join(homedir(), '.config', 'wardayacode', 'hooks'),
-      ];
-      const hooks: string[] = [];
-      for (const dir of hookDirs) {
-        if (existsSync(dir)) {
-          for (const f of readdirSync(dir).filter(f => f.endsWith('.sh'))) {
-            hooks.push(f);
-          }
-        }
+      if (arg === 'trust') {
+        return { handled: true, output: await ctx.trustHooks() };
       }
-      if (hooks.length === 0) {
-        return { handled: true, output: 'No hook scripts found.\nHooks are shell commands that run on tool events.\nAdd .sh files to .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.' };
-      }
-      return { handled: true, output: `Hook scripts:\n  ${hooks.join('\n  ')}` };
+      return { handled: true, output: await ctx.getHooksInfo() };
     }
 
     case '/memory': {
       const { existsSync, readdirSync, readFileSync } = await import('fs');
       const { join } = await import('path');
       const { homedir } = await import('os');
-      const memDir = join(homedir(), '.claude', 'memory');
-      if (!existsSync(memDir)) {
-        return { handled: true, output: 'No memory files found.\nMemory files are stored in ~/.claude/memory/.\nUse /memory <topic> to view or create a memory entry.' };
+      const memDirs = [
+        join(ctx.getProjectRoot(), '.wardayacode', 'memory'),
+        join(homedir(), '.config', 'wardayacode', 'memory'),
+      ];
+      const files: { name: string; path: string }[] = [];
+      for (const dir of memDirs) {
+        if (!existsSync(dir)) continue;
+        for (const f of readdirSync(dir).filter(f => f.endsWith('.md'))) {
+          files.push({ name: f, path: join(dir, f) });
+        }
       }
-      const files = readdirSync(memDir).filter(f => f.endsWith('.md'));
+      const locations = 'Memory files are stored in .wardayacode/memory/ or ~/.config/wardayacode/memory/.';
       if (files.length === 0) {
-        return { handled: true, output: 'No memory files found.\nMemory files are stored in ~/.claude/memory/.\nUse /memory <topic> to view or create a memory entry.' };
+        return { handled: true, output: `No memory files found.\n${locations}\nUse /memory <topic> to view or create a memory entry.` };
       }
       if (arg) {
-        const topicFile = files.find(f => f.toLowerCase().includes(arg.toLowerCase()));
-        if (!topicFile) {
-          return { handled: true, output: `No memory found matching "${arg}".\nAvailable topics:\n  ${files.map(f => f.replace('.md', '')).join('\n  ')}` };
+        const match = files.find(f => f.name.toLowerCase().includes(arg.toLowerCase()));
+        if (!match) {
+          return { handled: true, output: `No memory found matching "${arg}".\nAvailable topics:\n  ${files.map(f => f.name.replace('.md', '')).join('\n  ')}` };
         }
-        const content = readFileSync(join(memDir, topicFile), 'utf-8');
-        return { handled: true, output: `${topicFile.replace('.md', '')}:\n${content.trim()}` };
+        const content = readFileSync(match.path, 'utf-8');
+        return { handled: true, output: `${match.name.replace('.md', '')}:\n${content.trim()}` };
       }
-      return { handled: true, output: `Memory files:\n  ${files.map(f => f.replace('.md', '')).join('\n  ')}\n\nUse /memory <topic> to view a memory entry.` };
+      return { handled: true, output: `Memory files:\n  ${files.map(f => f.name.replace('.md', '')).join('\n  ')}\n\n${locations}\nUse /memory <topic> to view a memory entry.` };
     }
 
     case '/anw': {
@@ -450,64 +367,62 @@ export async function handleSlashCommand(
       if (!arg) {
         return { handled: true, output: `Current effort level: ${ctx.getEffort()}\nUsage: /effort <low|medium|high>` };
       }
+      if (!['low', 'medium', 'high'].includes(arg)) {
+        return { handled: true, output: `Invalid effort level: ${arg}\nUsage: /effort <low|medium|high>` };
+      }
       ctx.setEffort(arg);
       return { handled: true, output: `Effort level set to: ${arg}` };
     }
 
     case '/tui': {
       if (!arg) {
-        return { handled: true, output: 'Usage: /tui <default|fullscreen>' };
+        return { handled: true, output: 'Usage: /tui <default>\nOnly the default renderer is available. "fullscreen" mode is not implemented.' };
       }
       return { handled: true, output: ctx.setTuiRenderer(arg) };
-    }
-
-    case '/ide': {
-      const root = ctx.getProjectRoot();
-      const { existsSync } = await import('fs');
-      const { join } = await import('path');
-      const hasVscode = root ? existsSync(join(root, '.vscode')) : false;
-      const hasJetbrains = root ? existsSync(join(root, '.idea')) : false;
-      const lines = ['IDE integrations:'];
-      lines.push(`  VS Code:    ${hasVscode ? '✓ .vscode/ detected' : '— not detected'}`);
-      lines.push(`  JetBrains:  ${hasJetbrains ? '✓ .idea/ detected' : '— not detected'}`);
-      if (!hasVscode && !hasJetbrains) {
-        lines.push('');
-        lines.push('  No IDE config found in the project root.');
-      }
-      return { handled: true, output: lines.join('\n') };
     }
 
     case '/stickers':
       return { handled: true, output: await ctx.openUrl('https://github.com/fawwazmw/wardayacode') };
 
     case '/permissions':
-      return { handled: true, output: `Permission mode: ${ctx.getPermissionMode()}\nUse /mode to change.\nRules are evaluated top-to-bottom; first match wins.` };
-
-    case '/team-onboarding':
-      return { handled: true, output: 'Team onboarding guide:\nShare your WardayaCode workflow with teammates.\nSee docs at https://github.com/fawwazmw/wardayacode' };
-
-    case '/add-dir': {
-      if (!arg) {
-        const dirs = ctx.getDirectories();
-        return { handled: true, output: dirs.length ? `Working directories:\n  ${dirs.join('\n  ')}` : 'No additional directories. Use /add-dir <path> to add one.' };
-      }
-      return { handled: true, output: ctx.addDirectory(arg) };
-    }
+      return { handled: true, output: ctx.getPermissionRules() };
 
     case '/doctor': {
+      const { execSync } = await import('node:child_process');
       const issues: string[] = [];
-      // Basic checks
+
+      // Version
       try {
         const v = ctx.getVersion();
         if (v) issues.push(`✓ Version: ${v}`);
-      } catch { issues.push('✗ Could not determine version'); }
+      } catch { issues.push('✗ Version: unknown'); }
+
+      // Model
       issues.push(`✓ Model: ${ctx.getModel()}`);
+
+      // Session
       issues.push(`✓ Session: ${ctx.getSessionId().slice(0, 8)}`);
+
+      // Permission mode
+      issues.push(`✓ Mode: ${ctx.getPermissionMode()}`);
+
+      // Git availability
+      try {
+        execSync('git --version', { stdio: 'pipe' });
+        issues.push('✓ Git: available');
+      } catch {
+        issues.push('✗ Git: not found');
+      }
+
+      // Project root exists
+      const root = ctx.getProjectRoot();
+      try {
+        const { existsSync } = await import('fs');
+        issues.push(`✓ Project root: ${existsSync(root) ? 'exists' : 'missing'}`);
+      } catch { issues.push('✓ Project root: readable'); }
+
       return { handled: true, output: `WardayaCode diagnostics:\n${issues.join('\n')}` };
     }
-
-    case '/rewind':
-      return { handled: true, output: 'Rewind restores code and/or conversation to a previous state.\nUse /checkpoint to create save points, /rollback to restore.' };
 
     case '/agents':
       return { handled: true, output: ctx.getAgentConfigSummary() };
@@ -520,23 +435,17 @@ export async function handleSlashCommand(
     }
 
     case '/mcp': {
-      const configs = ctx.scanMcpConfigs();
-      if (configs.length === 0) {
-        return { handled: true, output: 'No MCP server configs found.\nMCP (Model Context Protocol) servers extend WardayaCode with external tools.\nAdd configs to .wardayacode/mcp/.' };
+      if (arg === 'list') {
+        return { handled: true, output: await ctx.mcpList() };
       }
-      return { handled: true, output: `MCP server configs:\n  ${configs.join('\n  ')}\nUse /plugin to manage plugins.` };
-    }
-
-    case '/plugin': {
-      const plugins = ctx.scanPlugins();
-      if (plugins.length === 0) {
-        return { handled: true, output: 'No plugins loaded.\nPlugins extend WardayaCode with custom functionality.' };
+      if (arg === 'connect' && parts[2]) {
+        return { handled: true, output: await ctx.mcpConnect(parts[2]!) };
       }
-      return { handled: true, output: `Loaded plugins:\n  ${plugins.join('\n  ')}` };
+      if (arg === 'disconnect' && parts[2]) {
+        return { handled: true, output: await ctx.mcpDisconnect(parts[2]!) };
+      }
+      return { handled: true, output: await ctx.mcpStatus() };
     }
-
-    case '/reload-plugins':
-      return { handled: true, output: await ctx.reloadPlugins() };
 
     case '/review':
       return { handled: true, output: await ctx.listOpenPRs() };
@@ -545,13 +454,13 @@ export async function handleSlashCommand(
       const enabled = ctx.getSandboxEnabled();
       if (arg === 'enable') {
         ctx.setSandboxEnabled(true);
-        return { handled: true, output: 'Sandbox enabled. File access is restricted to the project directory.' };
+        return { handled: true, output: 'Sandbox enabled. Bash, git, and write tools are now blocked.' };
       }
       if (arg === 'disable') {
         ctx.setSandboxEnabled(false);
-        return { handled: true, output: 'Sandbox disabled. File access is unrestricted.' };
+        return { handled: true, output: 'Sandbox disabled. Tool restrictions removed.' };
       }
-      return { handled: true, output: `Sandbox: ${enabled ? 'enabled' : 'disabled'}\nThe sandbox restricts file operations to the project directory.\nUse /sandbox enable or /sandbox disable.` };
+      return { handled: true, output: `Sandbox: ${enabled ? 'enabled' : 'disabled'}\nSandbox denies bash, git, write, and edit tools.\nUse /sandbox enable or /sandbox disable.` };
     }
 
     case '/security-review': {

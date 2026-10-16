@@ -25,9 +25,9 @@ describe('HelpDialog', () => {
     expect(out).toContain('Commands');
     expect(out).toContain('Custom Commands');
     // Shortcut keys from each of the three columns render.
-    expect(out).toContain('for bash mode');
-    expect(out).toContain('double tap esc');
-    expect(out).toContain('ctrl + shift + -');
+    expect(out).toContain('for commands');
+    expect(out).toContain('to submit');
+    expect(out).toContain('ctrl + c');
   });
 
   it('Right arrow advances to the Commands section showing the first page of commands', async () => {
@@ -42,8 +42,8 @@ describe('HelpDialog', () => {
     await tickMs();
     const out = lastFrame() ?? '';
     // First command in the catalog is visible; a later one is scrolled off.
-    expect(out).toContain('/add-dir');
-    expect(out).toContain('Add a new working directory');
+    expect(out).toContain('/agents');
+    expect(out).toContain('Manage agent configurations');
     expect(out).not.toContain('/theme');
     // Position indicator shows a 7-row window.
     expect(out).toContain('1–7 of');
@@ -74,7 +74,7 @@ describe('HelpDialog', () => {
     await tickMs();
     const out = lastFrame() ?? '';
     // Scrolled one row: the first command is gone, the window shifts down.
-    expect(out).not.toContain('/add-dir');
+    expect(out).not.toContain('/agents');
     expect(out).toContain('2–8 of');
   });
 
@@ -88,7 +88,7 @@ describe('HelpDialog', () => {
     stdin.write(RIGHT);
     await tickMs();
     const out = lastFrame() ?? '';
-    expect(out).toContain('No custom commands yet.');
+    expect(out).toContain('Custom commands are not supported yet.');
   });
 
   it('Left arrow from General wraps to Custom Commands', async () => {
@@ -99,7 +99,7 @@ describe('HelpDialog', () => {
     stdin.write(LEFT);
     await tickMs();
     const out = lastFrame() ?? '';
-    expect(out).toContain('No custom commands yet.');
+    expect(out).toContain('Custom commands are not supported yet.');
   });
 
   it('Esc closes the dialog', async () => {

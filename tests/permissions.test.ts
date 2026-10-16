@@ -62,6 +62,24 @@ describe('PermissionSystem — tool name matching', () => {
     expect((await perms.check({ name: 'bash', input: {} })).allowed).toBe(true);
     expect((await perms.check({ name: 'write_file', input: {} })).allowed).toBe(true);
   });
+
+  it('denies mcp__* tools and prompts', async () => {
+    const perms = new PermissionSystem('default');
+    const prompt = vi.fn().mockResolvedValue('deny');
+    perms.setPromptHandler(prompt);
+    const result = await perms.check({ name: 'mcp__github__create_issue', input: {} });
+    expect(result.allowed).toBe(false);
+    expect(prompt).toHaveBeenCalledWith('mcp__github__create_issue', {}, expect.any(String));
+  });
+
+  it('denies mcp__* tools even in auto mode', async () => {
+    const perms = new PermissionSystem('auto');
+    const prompt = vi.fn().mockResolvedValue('deny');
+    perms.setPromptHandler(prompt);
+    const result = await perms.check({ name: 'mcp__filesystem__read', input: {} });
+    expect(result.allowed).toBe(false);
+    expect(prompt).toHaveBeenCalled();
+  });
 });
 
 describe('PermissionSystem — plan mode hard deny', () => {
@@ -150,6 +168,40 @@ describe('PermissionSystem — addRule and pattern matching', () => {
     const allowed = await perms.check({ name: 'read_file', input: { path: '/project/src/index.ts' } });
     expect(denied.allowed).toBe(false);
     expect(allowed.allowed).toBe(true);
+  });
+
+  it('pattern rule matches file tools on input.filePath', async () => {
+    const perms = new PermissionSystem('auto');
+    perms.addRule({ tool: 'write_file', action: 'deny', pattern: '**/.env', reason: 'no env writes' });
+    const denied = await perms.check({ name: 'write_file', input: { filePath: '/project/.env' } });
+    const allowed = await perms.check({ name: 'write_file', input: { filePath: '/project/index.ts' } });
+    expect(denied.allowed).toBe(false);
+    expect(allowed.allowed).toBe(true);
+  });
+
+  it('a path-scoped rule does not match a call with no path', async () => {
+    const perms = new PermissionSystem('auto');
+    perms.addRule({ tool: 'bash', action: 'deny', pattern: '**/secret/**', reason: 'restricted' });
+    const result = await perms.check({ name: 'bash', input: { command: 'ls' } });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('sandbox blocks risky tools in any mode and survives setMode', async () => {
+    const perms = new PermissionSystem('auto');
+    perms.setSandbox(true);
+
+    const bash = await perms.check({ name: 'bash', input: {} });
+    const write = await perms.check({ name: 'write_file', input: {} });
+    expect(bash.allowed).toBe(false);
+    expect(bash.reason).toContain('sandbox');
+    expect(write.allowed).toBe(false);
+
+    // Changing permission mode must not drop sandbox enforcement.
+    perms.setMode('auto');
+    expect((await perms.check({ name: 'bash', input: {} })).allowed).toBe(false);
+
+    perms.setSandbox(false);
+    expect((await perms.check({ name: 'write_file', input: {} })).allowed).toBe(true);
   });
 
   it('unknown tool is denied when no wildcard rule matches', async () => {

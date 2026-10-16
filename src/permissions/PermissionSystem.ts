@@ -7,11 +7,15 @@ export type PermissionPromptHandler = (
   reason: string
 ) => Promise<'allow' | 'deny' | 'always'>;
 
+/** Tools blocked whenever sandbox mode is enabled. */
+const SANDBOX_BLOCKED_TOOLS = new Set(['bash', 'git', 'write_file', 'edit_file']);
+
 export class PermissionSystem {
   private mode: PermissionMode;
   private rules: PermissionRule[] = [];
   private sessionAllowList = new Set<string>();
   private promptHandler?: PermissionPromptHandler;
+  private sandboxEnabled = false;
 
   constructor(mode: PermissionMode = 'default') {
     this.mode = mode;
@@ -62,11 +66,20 @@ export class PermissionSystem {
         this.rules = [{ tool: '*', action: 'allow' }];
         break;
     }
+
+    // MCP tools always require permission, in every mode
+    this.rules.unshift({ tool: 'mcp__*', action: 'deny', reason: 'MCP tools require approval' });
   }
 
   async check(toolUse: ToolUse): Promise<PermissionResult> {
     if (this.sessionAllowList.has(toolUse.name)) {
       return { allowed: true };
+    }
+
+    // Sandbox is independent of the rule list and the permission mode: once
+    // enabled it blocks the risky tools in every mode until explicitly disabled.
+    if (this.sandboxEnabled && SANDBOX_BLOCKED_TOOLS.has(toolUse.name)) {
+      return { allowed: false, reason: 'Blocked by sandbox mode' };
     }
 
     for (const rule of this.rules) {
@@ -105,13 +118,24 @@ export class PermissionSystem {
   }
 
   private matchesRule(toolUse: ToolUse, rule: PermissionRule): boolean {
-    if (rule.tool !== '*' && rule.tool !== toolUse.name) {
-      return false;
+    if (rule.tool !== '*') {
+      if (rule.tool.includes('*')) {
+        if (!minimatch(toolUse.name, rule.tool)) {
+          return false;
+        }
+      } else if (rule.tool !== toolUse.name) {
+        return false;
+      }
     }
 
-    if (rule.pattern && toolUse.input?.path) {
-      const path = String(toolUse.input.path);
-      if (!minimatch(path, rule.pattern)) {
+    if (rule.pattern) {
+      // File tools use `filePath`; search/list tools use `path`. A path-scoped
+      // rule only applies when the call actually has a path.
+      const rawPath = toolUse.input?.filePath ?? toolUse.input?.path;
+      if (rawPath === undefined) {
+        return false;
+      }
+      if (!minimatch(String(rawPath), rule.pattern)) {
         return false;
       }
     }
@@ -140,5 +164,14 @@ export class PermissionSystem {
 
   getSessionAllowList(): string[] {
     return [...this.sessionAllowList];
+  }
+
+  /** Enable or disable sandbox mode (independent of the permission mode). */
+  setSandbox(enabled: boolean): void {
+    this.sandboxEnabled = enabled;
+  }
+
+  isSandboxEnabled(): boolean {
+    return this.sandboxEnabled;
   }
 }

@@ -36,12 +36,10 @@ interface HelpCommand {
 // reference list (kept separate from the live SLASH_COMMANDS registry that
 // drives autocomplete and the command handler).
 const HELP_COMMANDS: HelpCommand[] = [
-  { name: '/add-dir', desc: 'Add a new working directory' },
   { name: '/agents', desc: 'Manage agent configurations' },
   { name: '/branch', desc: 'Create a branch of the current conversation at this point' },
   { name: '/anw', desc: 'Ask a quick side question without interrupting the main conversation' },
   { name: '/clear', desc: 'Start fresh: discard the current conversation and context' },
-  { name: '/color', desc: 'Set the prompt bar color for this session' },
   { name: '/compact', desc: 'Clear conversation history but keep a summary in context' },
   { name: '/config', desc: 'Open config panel' },
   { name: '/context', desc: 'Visualize current usage as a colored grid' },
@@ -52,66 +50,46 @@ const HELP_COMMANDS: HelpCommand[] = [
   { name: '/effort', desc: 'Set effort level for model usage' },
   { name: '/exit', desc: 'Exit the REPL' },
   { name: '/export', desc: 'Export the current conversation to a file or clipboard' },
-  { name: '/fast', desc: 'Toggle fast mode' },
   { name: '/feedback', desc: 'Submit feedback about WardayaCode' },
   { name: '/help', desc: 'Show help and available commands' },
   { name: '/hooks', desc: 'View hook configurations for tool events' },
-  { name: '/ide', desc: 'Manage IDE integrations and show status' },
   { name: '/init', desc: 'Initialize a new WARDAYA.md file with codebase documentation' },
-  { name: '/insights', desc: 'Generate a report analyzing your WardayaCode sessions' },
   { name: '/keybindings', desc: 'Open or create your keybindings configuration file' },
   { name: '/mcp', desc: 'Manage MCP servers' },
   { name: '/memory', desc: 'Edit Wardaya memory files' },
-  { name: '/model', desc: 'Set the AI model for WardayaCode' },
+  { name: '/model', desc: 'Show the current AI model' },
   { name: '/permissions', desc: 'Manage allow & deny tool permission rules' },
   { name: '/plan', desc: 'Enable plan mode or view the current session plan' },
-  { name: '/plugin', desc: 'Manage WardayaCode plugins' },
-  { name: '/recap', desc: 'Generate a one-line session recap now' },
-  { name: '/release-notes', desc: 'View release notes' },
-  { name: '/reload-plugins', desc: 'Activate pending plugin changes in the current session' },
   { name: '/rename', desc: 'Rename the current conversation' },
   { name: '/resume', desc: 'Resume a previous conversation' },
   { name: '/review', desc: 'Review a pull request' },
-  { name: '/rewind', desc: 'Restore the code and/or conversation to a previous point' },
-  { name: '/sandbox', desc: 'Configure the sandbox' },
+  { name: '/sandbox', desc: 'Block bash, git, and write tools' },
   { name: '/security-review', desc: 'Complete a security review of the pending changes on the current branch' },
   { name: '/skills', desc: 'List available skills' },
   { name: '/stats', desc: 'Show your WardayaCode usage statistics and activity' },
-  { name: '/status', desc: 'Show WardayaCode status including version, model, account, API connectivity, and tool statuses' },
-  { name: '/statusline', desc: "Set up WardayaCode's status line UI" },
+  { name: '/status', desc: 'Show version, model, mode, session, and usage stats' },
   { name: '/stickers', desc: 'Order WardayaCode stickers' },
-  { name: '/tasks', desc: 'List and manage background tasks' },
-  { name: '/team-onboarding', desc: 'Help teammates ramp on WardayaCode with a guide from your usage' },
   { name: '/theme', desc: 'Change the theme' },
-  { name: '/tui', desc: 'Set the terminal UI renderer (default | fullscreen)' },
+  { name: '/tui', desc: 'Set the terminal UI renderer (default only)' },
 ];
 
 // Grouped so related shortcuts render with a blank line between blocks, matching
 // the layout the user laid out.
 const SHORTCUT_GROUPS: Shortcut[][] = [
   [
-    { key: '!', desc: 'for bash mode' },
     { key: '/', desc: 'for commands' },
-    { key: '@', desc: 'for file paths' },
-    { key: '&', desc: 'for background' },
-    { key: '/anw', desc: 'for side question' },
+    { key: 'tab', desc: 'to autocomplete' },
+    { key: '↑ / ↓', desc: 'for history' },
   ],
   [
-    { key: 'double tap esc', desc: 'to clear input' },
-    { key: 'shift + tab', desc: 'to auto-accept edits' },
+    { key: 'enter', desc: 'to submit' },
+    { key: 'shift + enter', desc: 'for new line' },
+    { key: 'esc', desc: 'to clear / interrupt' },
+  ],
+  [
+    { key: 'ctrl + c', desc: 'to interrupt / clear / exit' },
+    { key: 'ctrl + d', desc: 'to exit' },
     { key: 'ctrl + o', desc: 'for verbose output' },
-    { key: 'ctrl + t', desc: 'to toggle tasks' },
-    { key: '\\ + return', desc: 'for new line' },
-  ],
-  [
-    { key: 'ctrl + shift + -', desc: 'to undo' },
-    { key: 'ctrl + z', desc: 'to suspend' },
-    { key: 'ctrl + v', desc: 'to paste images' },
-    { key: 'alt + p', desc: 'to switch model' },
-    { key: 'alt + o', desc: 'to toggle fast mode' },
-    { key: 'ctrl + s', desc: 'to stash prompt' },
-    { key: 'ctrl + g', desc: 'to edit in $EDITOR' },
-    { key: '/keybindings', desc: 'to customize' },
   ],
 ];
 
@@ -284,11 +262,10 @@ function CustomCommandsSection({ themeMode }: { themeMode: 'dark' | 'light' }): 
   const colors = inkColors[themeMode];
   return (
     <Box flexDirection="column">
-      <Text color={colors.muted}>No custom commands yet.</Text>
+      <Text color={colors.muted}>Custom commands are not supported yet.</Text>
       <Box marginTop={1}>
         <Text color={colors.muted} dimColor>
-          Define your own commands as <Text color={colors.accent}>.md</Text> files in{' '}
-          <Text color={colors.accent}>.wardayacode/commands/</Text> to see them here.
+          Use child sessions or MCP servers to add custom tooling.
         </Text>
       </Box>
     </Box>

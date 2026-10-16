@@ -3,7 +3,8 @@ import { z } from 'zod';
 import EventEmitter from 'eventemitter3';
 import type { ToolRegistry } from '../tools/ToolRegistry.js';
 import type { PermissionSystem } from '../permissions/PermissionSystem.js';
-import type { ToolResult } from '../types.js';
+import type { HookSystem } from '../extensibility/HookSystem.js';
+import type { ToolResult, HookResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { isRetryableError, getRetryDelay, sleep } from '../utils/retry.js';
 import { injectCwdReminder } from './cwdReminder.js';
@@ -12,6 +13,7 @@ export interface AgentConfig {
   model: LanguageModel;
   toolRegistry: ToolRegistry;
   permissions: PermissionSystem;
+  hookSystem?: HookSystem;
   systemPrompt?: string;
   maxTokens?: number;
   temperature?: number;
@@ -23,12 +25,14 @@ export interface AgentConfig {
    * prior, which keeps models from inventing sandbox-style paths.
    */
   cwd?: string;
+  /** Session id, surfaced to hooks via the sessionStart event. */
+  sessionId?: string;
 }
 
 export interface AgentEvents {
   'text-delta': (delta: string) => void;
-  'tool-call-start': (payload: { toolName: string; args: Record<string, unknown> }) => void;
-  'tool-call-result': (payload: { toolName: string; result: ToolResult }) => void;
+  'tool-call-start': (payload: { toolName: string; args: Record<string, unknown>; toolCallId?: string }) => void;
+  'tool-call-result': (payload: { toolName: string; result: ToolResult; toolCallId?: string }) => void;
   'error': (error: Error) => void;
   'retry': (payload: { attempt: number; maxRetries: number; delayMs: number; error: string }) => void;
   'usage': (payload: { promptTokens: number; completionTokens: number; totalTokens: number }) => void;
@@ -39,24 +43,54 @@ export class Agent extends EventEmitter<AgentEvents> {
   private readonly model: LanguageModel;
   private readonly toolRegistry: ToolRegistry;
   private readonly permissions: PermissionSystem;
+  private readonly hookSystem: HookSystem | undefined;
   private readonly systemPrompt: string;
   private readonly maxTokens: number;
   private readonly temperature: number;
   private readonly maxSteps: number;
   private readonly maxRetries: number;
   private readonly cwd: string | undefined;
+  private readonly sessionId: string | undefined;
+  private effort: string;
 
   constructor(config: AgentConfig) {
     super();
     this.model = config.model;
     this.toolRegistry = config.toolRegistry;
     this.permissions = config.permissions;
+    this.hookSystem = config.hookSystem;
     this.systemPrompt = config.systemPrompt ?? 'You are a helpful coding assistant.';
     this.maxTokens = config.maxTokens ?? 4096;
     this.temperature = config.temperature ?? 0;
     this.maxSteps = config.maxSteps ?? 25;
     this.maxRetries = config.maxRetries ?? 3;
     this.cwd = config.cwd;
+    this.sessionId = config.sessionId;
+    this.effort = 'medium';
+  }
+
+  /** Set the reasoning effort level (low / medium / high). */
+  setEffort(level: string): void {
+    if (['low', 'medium', 'high'].includes(level)) {
+      this.effort = level;
+    }
+  }
+
+  /** Get current effort level. */
+  getEffort(): string {
+    return this.effort;
+  }
+
+  /** Emit a hook event and return the merged result from all handlers. */
+  private async emitHook(
+    event: 'preToolUse' | 'postToolUse' | 'sessionStart' | 'sessionEnd' | 'userPromptSubmit' | 'stop' | 'notification',
+    context: Record<string, unknown>,
+  ): Promise<HookResult | undefined> {
+    if (!this.hookSystem) return undefined;
+    return this.hookSystem.emitWithResult(event, {
+      event,
+      ...context,
+    });
   }
 
   private buildTools(): Record<string, CoreTool> {
@@ -67,8 +101,8 @@ export class Agent extends EventEmitter<AgentEvents> {
       tools[def.name] = {
         description: def.description,
         parameters: this.jsonSchemaToZod(def.inputSchema),
-        execute: async (args: Record<string, unknown>) => {
-          return this.executeTool(def.name, args);
+        execute: async (args: Record<string, unknown>, options: { toolCallId?: string }) => {
+          return this.executeTool(def.name, args, options?.toolCallId);
         },
       };
     }
@@ -142,7 +176,29 @@ export class Agent extends EventEmitter<AgentEvents> {
     return z.object(shape);
   }
 
-  private async executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+  private async executeTool(name: string, args: Record<string, unknown>, toolCallId?: string): Promise<string> {
+    // Emit start before the gates so denied/blocked calls are still visible and
+    // persisted (a matching tool-result always follows).
+    this.emit('tool-call-start', { toolName: name, args, toolCallId });
+
+    // Pre-tool-use hook — can modify args or block execution
+    if (this.hookSystem) {
+      const hookResult = await this.emitHook('preToolUse', { toolName: name, toolInput: args });
+      if (hookResult?.proceed === false) {
+        const deniedResult: ToolResult = {
+          success: false,
+          error: `Blocked by hook: ${hookResult.reason ?? 'No reason provided'}`,
+        };
+        logger.warn('tool blocked by hook', { tool: name, reason: hookResult.reason });
+        this.emit('tool-call-result', { toolName: name, result: deniedResult, toolCallId });
+        return JSON.stringify(deniedResult);
+      }
+      // Use modified input if the hook changed it
+      if (hookResult?.modifiedInput) {
+        args = hookResult.modifiedInput as Record<string, unknown>;
+      }
+    }
+
     const permissionResult = await this.permissions.check({ name, input: args });
 
     if (!permissionResult.allowed) {
@@ -151,12 +207,11 @@ export class Agent extends EventEmitter<AgentEvents> {
         error: `Permission denied: ${permissionResult.reason ?? 'No reason provided'}`,
       };
       logger.warn('tool denied', { tool: name, reason: permissionResult.reason });
-      this.emit('tool-call-result', { toolName: name, result: deniedResult });
+      this.emit('tool-call-result', { toolName: name, result: deniedResult, toolCallId });
       return JSON.stringify(deniedResult);
     }
 
     logger.debug('tool call', { tool: name, args });
-    this.emit('tool-call-start', { toolName: name, args });
 
     const start = Date.now();
     const result = await this.toolRegistry.execute(name, args);
@@ -167,11 +222,15 @@ export class Agent extends EventEmitter<AgentEvents> {
       logger.warn('tool failed', { tool: name, error: result.error, durationMs });
     }
 
-    this.emit('tool-call-result', { toolName: name, result });
+    this.emit('tool-call-result', { toolName: name, result, toolCallId });
+
+    // Post-tool-use hook
+    await this.emitHook('postToolUse', { toolName: name, toolInput: args, toolResult: result });
+
     return JSON.stringify(result);
   }
 
-  async run(messages: CoreMessage[]): Promise<string> {
+  async run(messages: CoreMessage[], abortSignal?: AbortSignal): Promise<string> {
     const allMessages: CoreMessage[] = [];
 
     if (this.systemPrompt) {
@@ -185,109 +244,128 @@ export class Agent extends EventEmitter<AgentEvents> {
 
     logger.debug('agent run started', { messageCount: messages.length, model: String(this.model) });
 
+    // Session start hook
+    await this.emitHook('sessionStart', { sessionId: this.sessionId ?? this.cwd });
+    // User prompt hook — fired once per run with the latest user turn.
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    await this.emitHook('userPromptSubmit', {
+      sessionId: this.sessionId,
+      message: typeof lastUser?.content === 'string' ? lastUser.content : undefined,
+    });
+
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      let fullText = '';
-      let stepCount = 0;
-      let outputEmitted = false;
-      let streamError: Error | null = null;
-
-      try {
-        const result = streamText({
-          model: this.model,
-          messages: allMessages,
-          tools,
-          maxSteps: this.maxSteps,
-          maxTokens: this.maxTokens,
-          temperature: this.temperature,
-          maxRetries: 0, // we handle retries ourselves
-          onStepFinish: ({ stepType }) => {
-            if (stepType === 'tool-result') {
-              stepCount++;
-            }
-          },
-        });
-
-        for await (const part of result.fullStream) {
-          switch (part.type) {
-            case 'text-delta':
-              fullText += part.textDelta;
-              outputEmitted = true;
-              this.emit('text-delta', part.textDelta);
-              break;
-            case 'tool-call':
-              outputEmitted = true;
-              break;
-            case 'error':
-              streamError = part.error instanceof Error ? part.error : new Error(String(part.error));
-              break;
-          }
-        }
-
-        if (streamError) {
-          throw streamError;
-        }
+    try {
+      for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+        let fullText = '';
+        let stepCount = 0;
+        let outputEmitted = false;
+        let streamError: Error | null = null;
 
         try {
-          const usage = await result.usage;
-          this.emit('usage', {
-            promptTokens: usage.promptTokens,
-            completionTokens: usage.completionTokens,
-            totalTokens: usage.totalTokens,
+          const result = streamText({
+            model: this.model,
+            messages: allMessages,
+            tools,
+            maxSteps: this.maxSteps,
+            maxTokens: this.maxTokens,
+            temperature: this.temperature,
+            maxRetries: 0,
+            ...(abortSignal ? { abortSignal } : {}),
+            // Provider-specific reasoning effort. Silently ignored by providers that don't support it.
+            ...(this.effort !== 'medium' ? { reasoningEffort: this.effort as 'low' | 'high' } : {}),
+            onStepFinish: ({ stepType }) => {
+              if (stepType === 'tool-result') {
+                stepCount++;
+              }
+            },
           });
-          logger.debug('token usage', { ...usage });
-        } catch {
-          // usage not available — skip
-        }
 
-        logger.debug('agent run done', { steps: stepCount, outputChars: fullText.length, attempt });
-        this.emit('done', { text: fullText, steps: stepCount });
-        return fullText;
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        lastError = err;
+          for await (const part of result.fullStream) {
+            switch (part.type) {
+              case 'text-delta':
+                fullText += part.textDelta;
+                outputEmitted = true;
+                this.emit('text-delta', part.textDelta);
+                break;
+              case 'tool-call':
+                outputEmitted = true;
+                break;
+              case 'error':
+                streamError = part.error instanceof Error ? part.error : new Error(String(part.error));
+                break;
+            }
+          }
 
-        // Don't retry if output was already emitted (would duplicate)
-        if (outputEmitted) {
-          logger.error('agent run failed (output already emitted)', { error: err.message, attempt });
-          this.emit('error', err);
-          throw err;
-        }
+          if (streamError) {
+            throw streamError;
+          }
 
-        // Don't retry if error is not retryable
-        if (!isRetryableError(err)) {
-          logger.error('agent run failed (not retryable)', { error: err.message, attempt });
-          this.emit('error', err);
-          throw err;
-        }
+          try {
+            const usage = await result.usage;
+            this.emit('usage', {
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+              totalTokens: usage.totalTokens,
+            });
+            logger.debug('token usage', { ...usage });
+          } catch {
+            // usage not available — skip
+          }
 
-        // Last attempt — give up
-        if (attempt === this.maxRetries) {
-          logger.error('agent run failed (max retries exceeded)', {
+          logger.debug('agent run done', { steps: stepCount, outputChars: fullText.length, attempt });
+          this.emit('done', { text: fullText, steps: stepCount });
+          return fullText;
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          lastError = err;
+
+          // Don't retry if output was already emitted (would duplicate)
+          if (outputEmitted) {
+            logger.error('agent run failed (output already emitted)', { error: err.message, attempt });
+            this.emit('error', err);
+            await this.emitHook('stop', { reason: err.message });
+            throw err;
+          }
+
+          // Don't retry if error is not retryable
+          if (!isRetryableError(err)) {
+            logger.error('agent run failed (not retryable)', { error: err.message, attempt });
+            this.emit('error', err);
+            await this.emitHook('stop', { reason: err.message });
+            throw err;
+          }
+
+          // Last attempt — give up
+          if (attempt === this.maxRetries) {
+            logger.error('agent run failed (max retries exceeded)', {
+              error: err.message,
+              attempts: attempt + 1,
+            });
+            this.emit('error', err);
+            await this.emitHook('stop', { reason: err.message });
+            throw err;
+          }
+
+          // Retry with backoff
+          const delayMs = getRetryDelay(err, attempt);
+          logger.warn('agent run retrying', {
+            attempt: attempt + 1,
+            maxRetries: this.maxRetries,
+            delayMs,
             error: err.message,
-            attempts: attempt + 1,
           });
-          this.emit('error', err);
-          throw err;
+          this.emit('retry', {
+            attempt: attempt + 1,
+            maxRetries: this.maxRetries,
+            delayMs,
+            error: err.message,
+          });
+          await sleep(delayMs);
         }
-
-        // Retry with backoff
-        const delayMs = getRetryDelay(err, attempt);
-        logger.warn('agent run retrying', {
-          attempt: attempt + 1,
-          maxRetries: this.maxRetries,
-          delayMs,
-          error: err.message,
-        });
-        this.emit('retry', {
-          attempt: attempt + 1,
-          maxRetries: this.maxRetries,
-          delayMs,
-          error: err.message,
-        });
-        await sleep(delayMs);
       }
+    } finally {
+      await this.emitHook('sessionEnd', {} as Record<string, unknown>);
     }
 
     throw lastError ?? new Error('Agent run failed for unknown reason');

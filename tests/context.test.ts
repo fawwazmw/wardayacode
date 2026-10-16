@@ -22,14 +22,33 @@ describe('ContextManager', () => {
     expect(ctx.getMessageCount()).toBe(2);
   });
 
-  it('deduplicates consecutive identical messages', async () => {
+  it('preserves distinct consecutive turns with identical text', async () => {
+    const ctx = new ContextManager();
+    ctx.addMessage(makeMessage('user', 'continue'));
+    ctx.addMessage(makeMessage('user', 'continue'));
+
+    const result = await ctx.compact();
+    expect(result.messages).toHaveLength(2);
+  });
+
+  it('collapses an exact duplicate message id', async () => {
     const ctx = new ContextManager();
     const msg = makeMessage('user', 'hello');
     ctx.addMessage(msg);
-    ctx.addMessage({ ...msg, id: 'dup' });
+    ctx.addMessage({ ...msg });
 
     const result = await ctx.compact();
     expect(result.messages).toHaveLength(1);
+  });
+
+  it('keeps a user-first window when compacting under pressure', async () => {
+    const ctx = new ContextManager('/tmp', 200);
+    ctx.addMessage(makeMessage('assistant', 'a'.repeat(400)));
+    ctx.addMessage(makeMessage('user', 'u'.repeat(100)));
+
+    const result = await ctx.compact();
+    const firstReal = result.messages.find(m => m.role !== 'system');
+    expect(firstReal?.role).toBe('user');
   });
 
   it('keeps non-consecutive duplicates', async () => {
@@ -109,6 +128,62 @@ describe('ContextManager', () => {
     expect(core).toHaveLength(2);
     expect(core[0]!.role).toBe('user');
     expect(core[1]!.role).toBe('assistant');
+  });
+
+  it('reconstructs tool calls and results into core messages', () => {
+    const ctx = new ContextManager();
+    ctx.addCoreMessage('user', 'read the file');
+    ctx.addMessage({
+      id: 'u1',
+      role: 'assistant',
+      content: '',
+      type: 'tool_use',
+      toolName: 'read_file',
+      toolInput: { filePath: '/a.ts' },
+      toolCallId: 'c1',
+      timestamp: Date.now(),
+    });
+    ctx.addMessage({
+      id: 'r1',
+      role: 'assistant',
+      content: '{"success":true}',
+      type: 'tool_result',
+      toolName: 'read_file',
+      toolResult: { success: true, content: '...' },
+      toolCallId: 'c1',
+      timestamp: Date.now(),
+    });
+    ctx.addCoreMessage('assistant', 'Done.');
+
+    const core = ctx.toCoreMessages();
+    expect(core.map(m => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+
+    const assistant = core[1]!;
+    expect(Array.isArray(assistant.content)).toBe(true);
+    const part = (assistant.content as Array<{ type: string; toolCallId: string }>)[0]!;
+    expect(part.type).toBe('tool-call');
+    expect(part.toolCallId).toBe('c1');
+
+    const tool = core[2]!;
+    expect(tool.role).toBe('tool');
+  });
+
+  it('drops leading non-user messages from reconstructed history', () => {
+    const ctx = new ContextManager();
+    ctx.addMessage({
+      id: 'u1',
+      role: 'assistant',
+      content: '',
+      type: 'tool_use',
+      toolName: 'read_file',
+      toolInput: {},
+      toolCallId: 'c1',
+      timestamp: Date.now(),
+    });
+    ctx.addCoreMessage('user', 'hi');
+
+    const core = ctx.toCoreMessages();
+    expect(core[0]!.role).toBe('user');
   });
 
   it('compact after clear starts fresh', async () => {
