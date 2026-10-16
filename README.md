@@ -6,7 +6,7 @@
 [![npm](https://img.shields.io/npm/v/wardayacode)](https://www.npmjs.com/package/wardayacode)
 [![CI](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml/badge.svg)](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-433-brightgreen)](https://github.com/fawwazmw/wardayacode)
+[![Tests](https://img.shields.io/badge/tests-494-brightgreen)](https://github.com/fawwazmw/wardayacode)
 
 <p align="center">
   <img src="docs/wardayacode-demo.png" alt="WardayaCode terminal UI" width="720">
@@ -58,7 +58,7 @@ Type any task in natural language. The agent reads your files, makes edits, runs
 - **44 slash commands** — Full command catalog with tabbed help dialog. Type `/help` to browse.
 - **Session management** — Auto-saved conversations, resume across restarts, export to markdown.
 - **Undo & checkpoint** — Revert file edits, git stashing, diff viewing.
-- **Extensible** — Hook system, skill system, MCP support, custom commands.
+- **Extensible** — MCP server support, skills, and hooks (see [Extensibility](#extensibility)).
 - **Privacy-first** — Your code talks through your own API keys. Nothing leaves your machine without your consent.
 - **Terminal-native UI** — React + Ink, streaming output, keyboard-driven workflow.
 
@@ -126,6 +126,10 @@ Type `/` in the TUI to open the command palette, or browse the full catalog with
 | `/rollback`   | Restore last checkpoint            |
 | `/review`     | List open pull requests            |
 | `/copy`       | Copy last response to clipboard    |
+| `/mcp`        | Manage MCP servers                 |
+| `/skills`     | List loaded skills                 |
+| `/hooks`      | Show hook status (`/hooks trust`)  |
+| `/permissions`| Show active permission rules       |
 | `/doctor`     | Installation diagnostics           |
 | `/feedback`   | Submit feedback                    |
 | `/config`     | Show configuration                 |
@@ -154,6 +158,78 @@ The agent uses these tools to interact with your codebase:
 | `list_files` | List a directory                                  |
 
 Dangerous operations (force push, `rm -rf`, `dd`, etc.) are permanently blocked.
+
+---
+
+## Extensibility
+
+### MCP servers
+
+WardayaCode can connect to local [Model Context Protocol](https://modelcontextprotocol.io) servers and expose their tools to the agent. Configure servers in `.mcp.json` at the project root, and/or one-per-file in `.wardayacode/mcp/*.json` (`.mcp.json` wins on name collisions):
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    }
+  }
+}
+```
+
+In the TUI:
+
+```
+/mcp                  # status of configured servers
+/mcp connect <name>   # connect — you approve the exact command first
+/mcp disconnect <name>
+```
+
+MCP tools are named `mcp__<server>__<tool>` and are **always permission-gated** — never auto-approved, even in `auto` mode.
+
+### Skills
+
+Skills are Markdown instructions the agent applies when relevant. Drop `.md` files in `.wardayacode/skills/` (project) or `~/.config/wardayacode/skills/` (user). The filename is the skill name, the first `# heading` is its description, and an optional `triggers:` line aids selection:
+
+```md
+# Release Checklist
+
+- Run `npm run type-check` and `npm run test:run`
+- Update the changelog
+- Tag `vX.Y.Z`
+```
+
+Loaded skills are injected into the agent's system prompt (size-capped). List them with `/skills`.
+
+### Hooks
+
+Hooks run your own scripts on agent events. Add `<event>.sh` (or `.js`) to `.wardayacode/hooks/` (project) or `~/.config/wardayacode/hooks/` (user).
+
+Events: `preToolUse`, `postToolUse`, `sessionStart`, `sessionEnd`, `userPromptSubmit`, `stop`.
+
+The hook receives the event context as JSON on **stdin**. For `preToolUse`:
+
+- exit `0` → proceed; stdout may be JSON `{"proceed":true,"modifiedInput":{...}}` to rewrite the tool args
+- exit `2` → block; stderr (or JSON `{"proceed":false,"reason":"..."}`) becomes the reason
+
+```bash
+#!/usr/bin/env bash
+# .wardayacode/hooks/preToolUse.sh — refuse writes to .env
+ctx=$(cat)
+path=$(printf '%s' "$ctx" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).toolInput?.filePath??""))')
+case "$path" in */.env) echo "refusing to touch .env" >&2; exit 2;; esac
+exit 0
+```
+
+**Trust:** user-level hooks always run. Project hooks do **not** run until you trust the project, because they can arrive with a cloned repository:
+
+```
+/hooks          # show discovered hooks and their trust state
+/hooks trust    # trust this project's hooks (stored in ~/.config/wardayacode/hooks-trust.json)
+```
+
+Hooks time out after 10 seconds; a crash or timeout is non-blocking.
 
 ---
 
