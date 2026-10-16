@@ -25,6 +25,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/feedback', description: 'Submit feedback about WardayaCode' },
   { name: '/hooks', description: 'View hook configurations for tool events' },
   { name: '/plugins', description: 'Manage plugins (list, trust, reload)' },
+  { name: '/add-dir', description: 'Add another working directory', args: '<path>' },
   { name: '/memory', description: 'Edit Wardaya memory files' },
   { name: '/anw', description: 'Ask a quick side question without interrupting the main conversation' },
   { name: '/effort', description: 'Set effort level for model usage', args: '<level>' },
@@ -125,6 +126,10 @@ export interface SlashCommandContext {
   trustPlugins: () => Promise<string>;
   /** Re-discover and reload plugins. */
   reloadPlugins: () => Promise<string>;
+  /** Additional working directories (including the project root). */
+  getDirectories: () => string[];
+  /** Allow another working directory; returns a human-readable result. */
+  addDirectory: (dir: string) => string;
   /** Enable or disable the sandbox. */
   setSandboxEnabled: (enabled: boolean) => void;
   /** Get sandbox enabled state. */
@@ -343,6 +348,20 @@ export async function handleSlashCommand(
         return { handled: true, output: await ctx.reloadPlugins() };
       }
       return { handled: true, output: await ctx.getPluginsInfo() };
+    }
+
+    case '/add-dir': {
+      const dir = parts.slice(1).join(' ').trim();
+      if (!dir) {
+        const dirs = ctx.getDirectories();
+        return {
+          handled: true,
+          output: dirs.length
+            ? `Working directories:\n  ${dirs.join('\n  ')}\n\nUse /add-dir <path> to add another.`
+            : 'No working directories. Use /add-dir <path> to add one.',
+        };
+      }
+      return { handled: true, output: ctx.addDirectory(dir) };
     }
 
     case '/memory': {
