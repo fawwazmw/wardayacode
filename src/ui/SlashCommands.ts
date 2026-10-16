@@ -515,13 +515,14 @@ export async function handleSlashCommand(
     }
 
     case '/model': {
-      if (!arg) {
+      const spec = parts.slice(1).join(' ').trim();
+      if (!spec) {
         return {
           handled: true,
-          output: `Model: ${ctx.getModel()}\nUsage: /model <model-id>  (e.g. claude-opus-4-1, gpt-4o-mini, gemini-2.0-flash)`,
+          output: `Model: ${ctx.getModel()}\nUsage: /model <model-id>  or  /model <provider>/<model-id>\nExamples: /model claude-opus-4-1, /model gpt-4o-mini, /model google/gemini-2.0-flash`,
         };
       }
-      return { handled: true, output: await ctx.switchModel(arg) };
+      return { handled: true, output: await ctx.switchModel(spec) };
     }
 
     case '/tokens': {

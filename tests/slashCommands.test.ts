@@ -431,6 +431,12 @@ describe('handleSlashCommand', () => {
     expect(result.output).toContain('gpt-4o-mini');
   });
 
+  it('handles /model <provider>/<id>', async () => {
+    const ctx = createMockContext();
+    await handleSlashCommand('/model openai/gpt-4o', ctx);
+    expect(ctx.switchModel).toHaveBeenCalledWith('openai/gpt-4o');
+  });
+
   it('handles /tokens', async () => {
     const ctx = createMockContext();
     const result = await handleSlashCommand('/tokens', ctx);
