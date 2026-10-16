@@ -5,15 +5,16 @@ import { spawn } from 'node:child_process';
 import type { HookEvent, HookContext, HookResult } from '../types.js';
 import type { HookSystem } from './HookSystem.js';
 
+// Events the agent actually emits today. `preCompact` and `notification` are
+// omitted deliberately — nothing emits them yet, so discovering their scripts
+// would advertise a hook that never runs.
 const HOOK_EVENTS: HookEvent[] = [
   'preToolUse',
   'postToolUse',
   'sessionStart',
   'sessionEnd',
   'userPromptSubmit',
-  'preCompact',
   'stop',
-  'notification',
 ];
 
 /** Default per-hook execution timeout. */
@@ -263,7 +264,7 @@ export class HookRuntime {
     const scripts = this.scripts.length ? this.scripts : await discoverHookScripts(this.projectRoot, projectTrusted);
 
     if (scripts.length === 0) {
-      return 'No hook scripts found.\nAdd <event>.sh or <event>.js to .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.\nEvents: preToolUse, postToolUse, sessionStart, sessionEnd, userPromptSubmit, preCompact, stop, notification.';
+      return 'No hook scripts found.\nAdd <event>.sh or <event>.js to .wardayacode/hooks/ or ~/.config/wardayacode/hooks/.\nEvents: preToolUse, postToolUse, sessionStart, sessionEnd, userPromptSubmit, stop.';
     }
 
     const lines = scripts.map(s => {
