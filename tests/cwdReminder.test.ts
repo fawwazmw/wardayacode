@@ -8,6 +8,17 @@ describe('buildCwdReminder', () => {
     expect(reminder).toContain('/home/fawwazmw/project');
     expect(reminder.toLowerCase()).toContain('working directory');
   });
+
+  it('lists additional allowed directories when provided', () => {
+    const reminder = buildCwdReminder('/proj', ['/other', '/lib']);
+    expect(reminder).toContain('/other');
+    expect(reminder).toContain('/lib');
+    expect(reminder).toContain('/add-dir');
+  });
+
+  it('omits the extra-directories clause when none are allowed', () => {
+    expect(buildCwdReminder('/proj')).not.toContain('/add-dir');
+  });
 });
 
 describe('injectCwdReminder', () => {
