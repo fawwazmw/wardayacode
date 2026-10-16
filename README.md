@@ -117,7 +117,7 @@ Type `/` in the TUI to open the command palette, or browse the full catalog with
 | `/init`       | Create WARDAYA.md for your project |
 | `/plan`       | Enter plan mode (read-only)        |
 | `/stats`      | Usage statistics                   |
-| `/model`      | Show current model                 |
+| `/model`      | Show or switch the model           |
 | `/effort`     | Set effort level (low/medium/high) |
 | `/branch`     | Create a git branch                |
 | `/diff`       | View uncommitted changes           |

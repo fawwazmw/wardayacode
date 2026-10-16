@@ -10,6 +10,7 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     getSessionName: () => '',
     setSessionName: vi.fn(),
     getModel: () => 'claude-sonnet-4-20250514',
+    switchModel: vi.fn().mockResolvedValue('Model switched to gpt-4o-mini.'),
     getVersion: () => '0.5.0',
     getPermissionMode: () => 'default',
     getTokenUsage: () => ({ input: 100, output: 200 }),
@@ -398,6 +399,15 @@ describe('handleSlashCommand', () => {
     const result = await handleSlashCommand('/model', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('claude-sonnet-4-20250514');
+    expect(result.output).toContain('Usage');
+  });
+
+  it('handles /model <id> by switching', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/model gpt-4o-mini', ctx);
+    expect(result.handled).toBe(true);
+    expect(ctx.switchModel).toHaveBeenCalledWith('gpt-4o-mini');
+    expect(result.output).toContain('gpt-4o-mini');
   });
 
   it('handles /tokens', async () => {

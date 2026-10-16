@@ -40,7 +40,7 @@ export interface AgentEvents {
 }
 
 export class Agent extends EventEmitter<AgentEvents> {
-  private readonly model: LanguageModel;
+  private model: LanguageModel;
   private readonly toolRegistry: ToolRegistry;
   private readonly permissions: PermissionSystem;
   private readonly hookSystem: HookSystem | undefined;
@@ -79,6 +79,11 @@ export class Agent extends EventEmitter<AgentEvents> {
   /** Get current effort level. */
   getEffort(): string {
     return this.effort;
+  }
+
+  /** Swap the active language model (runtime /model switch). */
+  setModel(model: LanguageModel): void {
+    this.model = model;
   }
 
   /** Emit a hook event and return the merged result from all handlers. */

@@ -315,11 +315,31 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
 
   const currentVersion = getCurrentVersion();
 
+  // Runtime model switching: rebuild the provider for the same provider/keys
+  // with a new model id and swap it into the live agent.
+  const switchModel = async (modelId: string): Promise<string> => {
+    try {
+      const next = createProvider({
+        provider: config.provider,
+        model: modelId,
+        apiKey: config.apiKey,
+        apiKeys: config.apiKeys,
+        ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+        maxTokens: config.maxTokens,
+        temperature: config.temperature,
+      });
+      agent.setModel(next);
+      return `Model switched to ${modelId}.`;
+    } catch (error) {
+      return `Failed to switch model: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  };
+
   if (options.tui !== false) {
     // Ink owns the terminal — route logs to the file only so warn/error lines
     // don't corrupt the frame or duplicate messages the UI already shows.
     logger.setConsoleOutput(false);
-    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, hookRuntime, currentVersion, initialPrompt);
+    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, hookRuntime, switchModel, currentVersion, initialPrompt);
   } else {
     await runPlainText(agent, session, permissions, mcpManager, currentVersion, initialPrompt);
   }
@@ -342,6 +362,7 @@ function runTUI(
   permissions: PermissionSystem,
   mcpManager: McpManager,
   hookRuntime: HookRuntime,
+  switchModel: (modelId: string) => Promise<string>,
   version: string,
   initialPrompt?: string
 ): void {
@@ -369,6 +390,7 @@ function runTUI(
           await hookRuntime.trustProject();
           return `Project hooks trusted. ${hookRuntime.getScripts().filter(s => s.trusted).length} hook(s) active.`;
         },
+        switchModel,
         version,
         maxTokens: config.maxTokens,
         temperature: config.temperature,
