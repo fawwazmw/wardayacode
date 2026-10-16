@@ -362,9 +362,13 @@ export function App({
       getSessionName: () => sessionNameRef.current,
       setSessionName: (name) => setSessionName(name),
       getModel: () => modelId,
-      switchModel: async (id: string) => {
-        const result = await switchModel(id);
-        if (result.startsWith('Model switched')) setModelId(id);
+      switchModel: async (spec: string) => {
+        const result = await switchModel(spec);
+        if (result.startsWith('Model switched')) {
+          const trimmed = spec.trim();
+          const slash = trimmed.indexOf('/');
+          setModelId(slash !== -1 ? trimmed.slice(slash + 1) : trimmed);
+        }
         return result;
       },
       getVersion: () => version,

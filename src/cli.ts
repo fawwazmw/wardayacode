@@ -322,12 +322,46 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
 
   const currentVersion = getCurrentVersion();
 
-  // Runtime model switching: rebuild the provider for the same provider/keys
-  // with a new model id and swap it into the live agent.
-  const switchModel = async (modelId: string): Promise<string> => {
+  // Runtime model switching. Accepts a bare model id (provider inferred from
+  // its prefix, else the current provider) or "provider/model".
+  const PROVIDER_MODEL_PREFIXES: Array<[ProviderName, string[]]> = [
+    ['anthropic', ['claude']],
+    ['openai', ['gpt', 'o1', 'o3', 'chatgpt']],
+    ['google', ['gemini']],
+  ];
+  const switchModel = async (spec: string): Promise<string> => {
+    const trimmed = spec.trim();
+    if (!trimmed) return 'Usage: /model <model-id> or /model <provider>/<model-id>';
+
+    let provider: ProviderName = config.provider;
+    let modelId = trimmed;
+
+    const slash = trimmed.indexOf('/');
+    if (slash !== -1) {
+      const maybeProvider = trimmed.slice(0, slash);
+      const rest = trimmed.slice(slash + 1);
+      if (isAuthProvider(maybeProvider) && rest) {
+        provider = maybeProvider;
+        modelId = rest;
+      }
+    } else {
+      const lower = trimmed.toLowerCase();
+      for (const [p, prefixes] of PROVIDER_MODEL_PREFIXES) {
+        if (prefixes.some(pre => lower.startsWith(pre))) {
+          provider = p;
+          break;
+        }
+      }
+    }
+
+    const apiKey = config.apiKeys?.[provider] ?? process.env[getProviderEnvVarName(provider)];
+    if (!apiKey) {
+      return `No API key for ${provider}. Set ${getProviderEnvVarName(provider)} or run /login ${provider} <key>.`;
+    }
+
     try {
       const next = createProvider({
-        provider: config.provider,
+        provider,
         model: modelId,
         apiKey: config.apiKey,
         apiKeys: config.apiKeys,
@@ -336,7 +370,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
         temperature: config.temperature,
       });
       agent.setModel(next);
-      return `Model switched to ${modelId}.`;
+      return `Model switched to ${modelId} (${provider}).`;
     } catch (error) {
       return `Failed to switch model: ${error instanceof Error ? error.message : String(error)}`;
     }
