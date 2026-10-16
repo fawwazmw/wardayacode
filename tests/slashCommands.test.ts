@@ -47,6 +47,9 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     mcpStatus: vi.fn().mockResolvedValue('  filesystem  — disconnected (0 tools)'),
     getHooksInfo: vi.fn().mockResolvedValue('Hooks:\n  preToolUse  active  user  guard.sh'),
     trustHooks: vi.fn().mockResolvedValue('Project hooks trusted. 1 hook(s) active.'),
+    getPluginsInfo: vi.fn().mockResolvedValue('Plugins:\n  demo  active  user'),
+    trustPlugins: vi.fn().mockResolvedValue('Project plugins trusted. 1 plugin(s) active.'),
+    reloadPlugins: vi.fn().mockResolvedValue('Plugins reloaded. 1 plugin(s) active.'),
     setSandboxEnabled: vi.fn(),
     getSandboxEnabled: () => false,
     askSideQuestion: vi.fn().mockResolvedValue('Side question received.'),
@@ -226,6 +229,24 @@ describe('handleSlashCommand', () => {
     const result = await handleSlashCommand('/hooks', ctx);
     expect(result.handled).toBe(true);
     expect(result.output).toContain('Hooks');
+  });
+
+  it('handles /plugins', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/plugins', ctx);
+    expect(result.handled).toBe(true);
+    expect(result.output).toContain('Plugins');
+  });
+
+  it('handles /plugins trust and reload', async () => {
+    const ctx = createMockContext();
+    const trust = await handleSlashCommand('/plugins trust', ctx);
+    expect(trust.output).toContain('trusted');
+    expect(ctx.trustPlugins).toHaveBeenCalled();
+
+    const reload = await handleSlashCommand('/plugins reload', ctx);
+    expect(reload.output).toContain('reloaded');
+    expect(ctx.reloadPlugins).toHaveBeenCalled();
   });
 
   it('handles /memory', async () => {
@@ -524,6 +545,7 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/copy');
     expect(names).toContain('/feedback');
     expect(names).toContain('/hooks');
+    expect(names).toContain('/plugins');
     expect(names).toContain('/memory');
     expect(names).toContain('/anw');
     expect(names).toContain('/effort');

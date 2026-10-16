@@ -46,6 +46,12 @@ interface AppProps {
   hooksInfo: () => Promise<string>;
   /** Trust the current project's hooks and activate them. */
   trustHooks: () => Promise<string>;
+  /** Human-readable plugin status for /plugins. */
+  pluginsInfo: () => Promise<string>;
+  /** Trust the current project's plugins and activate them. */
+  trustPlugins: () => Promise<string>;
+  /** Re-discover and reload plugins. */
+  reloadPlugins: () => Promise<string>;
   /** Swap the active model at runtime; returns a human-readable result. */
   switchModel: (modelId: string) => Promise<string>;
   maxTokens: number;
@@ -126,6 +132,9 @@ export function App({
   version,
   hooksInfo,
   trustHooks,
+  pluginsInfo,
+  trustPlugins,
+  reloadPlugins,
   switchModel,
   maxTokens,
   temperature,
@@ -550,6 +559,9 @@ export function App({
       },
       getHooksInfo: () => hooksInfo(),
       trustHooks: () => trustHooks(),
+      getPluginsInfo: () => pluginsInfo(),
+      trustPlugins: () => trustPlugins(),
+      reloadPlugins: () => reloadPlugins(),
       getSandboxEnabled: () => permissions.isSandboxEnabled(),
       setSandboxEnabled: (enabled: boolean) => {
         // Sandbox is a first-class gate in PermissionSystem, independent of the

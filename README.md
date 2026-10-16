@@ -58,7 +58,7 @@ Type any task in natural language. The agent reads your files, makes edits, runs
 - **44 slash commands** — Full command catalog with tabbed help dialog. Type `/help` to browse.
 - **Session management** — Auto-saved conversations, resume across restarts, export to markdown.
 - **Undo & checkpoint** — Revert file edits, git stashing, diff viewing.
-- **Extensible** — MCP server support, skills, and hooks (see [Extensibility](#extensibility)).
+- **Extensible** — MCP server support, skills, hooks, and plugins (see [Extensibility](#extensibility)).
 - **Privacy-first** — Your code talks through your own API keys. Nothing leaves your machine without your consent.
 - **Terminal-native UI** — React + Ink, streaming output, keyboard-driven workflow.
 
@@ -129,6 +129,7 @@ Type `/` in the TUI to open the command palette, or browse the full catalog with
 | `/mcp`        | Manage MCP servers                 |
 | `/skills`     | List loaded skills                 |
 | `/hooks`      | Show hook status (`/hooks trust`)  |
+| `/plugins`    | Manage plugins (list, trust, reload)|
 | `/permissions`| Show active permission rules       |
 | `/doctor`     | Installation diagnostics           |
 | `/feedback`   | Submit feedback                    |
@@ -230,6 +231,30 @@ exit 0
 ```
 
 Hooks time out after 10 seconds; a crash or timeout is non-blocking.
+
+### Plugins
+
+Plugins are ES modules (`.mjs`/`.js`) that extend the agent with tools and/or hooks. Add them under `.wardayacode/plugins/` (project) or `~/.config/wardayacode/plugins/` (user). A plugin default-exports a `function (api)` and/or exports `tools`/`hooks` arrays:
+
+```js
+// .wardayacode/plugins/clock.mjs
+export default function (api) {
+  api.registerTool({
+    name: 'now',
+    description: 'Return the current ISO timestamp',
+    inputSchema: { type: 'object', properties: {} },
+    execute: () => ({ success: true, content: new Date().toISOString() }),
+  });
+}
+```
+
+Registered tools are immediately available to the agent (they show up on the next turn). Like hooks, **project plugins are untrusted** until you approve them, because they run arbitrary code:
+
+```
+/plugins          # list plugins and their trust state
+/plugins trust    # trust this project's plugins (stored in ~/.config/wardayacode/plugins-trust.json)
+/plugins reload   # re-discover and reload after editing/adding files
+```
 
 ---
 
