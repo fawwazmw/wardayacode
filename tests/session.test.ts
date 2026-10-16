@@ -67,6 +67,37 @@ describe('Session', () => {
     expect(messages[1]!.content).toBe('second');
   });
 
+  it('persists and reloads tool messages with toolCallId', async () => {
+    const session = await Session.create(TEST_DIR, 'default');
+    await session.append({
+      id: 'u1',
+      role: 'assistant',
+      content: '',
+      type: 'tool_use',
+      toolName: 'read_file',
+      toolInput: { filePath: '/a.ts' },
+      toolCallId: 'c1',
+    });
+    await session.append({
+      id: 'r1',
+      role: 'assistant',
+      content: '{"success":true}',
+      type: 'tool_result',
+      toolName: 'read_file',
+      toolResult: { success: true, content: 'ok' },
+      toolCallId: 'c1',
+    });
+
+    const loaded = new Session(session.getId(), TEST_DIR, 'default');
+    await loaded.load();
+    const msgs = loaded.getMessages();
+
+    expect(msgs.find(m => m.type === 'tool_use')?.toolCallId).toBe('c1');
+    const result = msgs.find(m => m.type === 'tool_result');
+    expect(result?.toolName).toBe('read_file');
+    expect(result?.toolCallId).toBe('c1');
+  });
+
   it('load() reads existing JSONL and populates messages', async () => {
     // Create a session, write messages, then load a new Session instance over the same file
     const sessionId = 'test-load-session';

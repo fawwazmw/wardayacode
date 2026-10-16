@@ -81,6 +81,8 @@ export interface Message {
   toolName?: string;
   toolInput?: Record<string, unknown>;
   toolResult?: ToolResult;
+  /** AI SDK tool-call id, links a tool_result to its tool_use. */
+  toolCallId?: string;
   timestamp: number;
 }
 
@@ -111,6 +113,8 @@ export interface SessionMessage {
   toolName?: string;
   toolInput?: Record<string, unknown>;
   toolResult?: ToolResult;
+  /** AI SDK tool-call id, links a tool_result to its tool_use. */
+  toolCallId?: string;
   metadata?: Record<string, unknown>;
 }
 

@@ -10,6 +10,8 @@ interface ToolCallMessage {
   toolName: string;
   args: Record<string, unknown>;
   result?: { success: boolean; content?: string; error?: string };
+  /** AI SDK tool-call id (used to match results and persist context). */
+  toolCallId?: string;
   /** Wall-clock time the tool call started, in ms (Date.now()). */
   startedAt?: number;
   /** How long the tool took once finished, in ms. */
