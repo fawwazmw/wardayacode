@@ -34,3 +34,30 @@ jobs:
 
       - name: Run tests
         run: npm run test:run
+
+      - name: Build
+        run: npm run build
+
+      - name: CLI smoke test
+        run: |
+          node dist/cli.js --help > /dev/null
+          node dist/cli.js --version
+          node dist/cli.js sessions list
+          node dist/cli.js auth list
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Coverage (enforces thresholds)
+        run: npm run test:coverage
