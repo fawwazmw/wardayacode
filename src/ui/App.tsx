@@ -36,6 +36,8 @@ interface AppProps {
   session: Session;
   model: string;
   languageModel?: LanguageModel;
+  /** Returns the currently active model (updates after a /model switch). */
+  getActiveModel?: () => LanguageModel;
   permissionMode: PermissionMode;
   themeMode: 'dark' | 'light';
   undoManager: UndoManager;
@@ -124,6 +126,7 @@ export function App({
   session: initialSession,
   model,
   languageModel,
+  getActiveModel,
   permissionMode: initialPermissionMode,
   themeMode: initialThemeMode,
   undoManager,
@@ -728,12 +731,13 @@ export function App({
         return lines.join('\n');
       },
       askSideQuestion: async (question: string) => {
-        if (!languageModel) {
+        const sideModel = getActiveModel?.() ?? languageModel;
+        if (!sideModel) {
           return 'Side questions require a LanguageModel instance (not available in this context).';
         }
         try {
           const result = streamText({
-            model: languageModel,
+            model: sideModel,
             messages: [
               { role: 'system', content: 'Answer the following question concisely. This is a side question from a coding session — be direct and helpful.' },
               { role: 'user', content: question },
