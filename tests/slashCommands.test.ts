@@ -50,6 +50,8 @@ function createMockContext(overrides: Partial<SlashCommandContext> = {}): SlashC
     getPluginsInfo: vi.fn().mockResolvedValue('Plugins:\n  demo  active  user'),
     trustPlugins: vi.fn().mockResolvedValue('Project plugins trusted. 1 plugin(s) active.'),
     reloadPlugins: vi.fn().mockResolvedValue('Plugins reloaded. 1 plugin(s) active.'),
+    getDirectories: () => ['/test'],
+    addDirectory: vi.fn().mockReturnValue('Added working directory: /new'),
     setSandboxEnabled: vi.fn(),
     getSandboxEnabled: () => false,
     askSideQuestion: vi.fn().mockResolvedValue('Side question received.'),
@@ -247,6 +249,19 @@ describe('handleSlashCommand', () => {
     const reload = await handleSlashCommand('/plugins reload', ctx);
     expect(reload.output).toContain('reloaded');
     expect(ctx.reloadPlugins).toHaveBeenCalled();
+  });
+
+  it('lists working directories with /add-dir', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/add-dir', ctx);
+    expect(result.output).toContain('/test');
+  });
+
+  it('adds a directory with /add-dir <path>', async () => {
+    const ctx = createMockContext();
+    const result = await handleSlashCommand('/add-dir /new', ctx);
+    expect(ctx.addDirectory).toHaveBeenCalledWith('/new');
+    expect(result.output).toContain('/new');
   });
 
   it('handles /memory', async () => {
@@ -552,6 +567,7 @@ describe('SLASH_COMMANDS registry', () => {
     expect(names).toContain('/feedback');
     expect(names).toContain('/hooks');
     expect(names).toContain('/plugins');
+    expect(names).toContain('/add-dir');
     expect(names).toContain('/memory');
     expect(names).toContain('/anw');
     expect(names).toContain('/effort');

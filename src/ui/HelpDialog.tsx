@@ -36,6 +36,7 @@ interface HelpCommand {
 // reference list (kept separate from the live SLASH_COMMANDS registry that
 // drives autocomplete and the command handler).
 const HELP_COMMANDS: HelpCommand[] = [
+  { name: '/add-dir', desc: 'Add another working directory' },
   { name: '/agents', desc: 'Manage agent configurations' },
   { name: '/branch', desc: 'Create a branch of the current conversation at this point' },
   { name: '/anw', desc: 'Ask a quick side question without interrupting the main conversation' },

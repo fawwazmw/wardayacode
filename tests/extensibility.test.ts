@@ -207,7 +207,7 @@ describe('SkillSystem', () => {
 
 // ── assertPathContained ───────────────────────────────────────────────────────
 
-import { assertPathContained } from '../src/tools/pathSafety.js';
+import { assertPathContained, addAllowedRoot, clearAllowedRoots } from '../src/tools/pathSafety.js';
 
 describe('assertPathContained()', () => {
   it('does not throw when path is inside rootDir', () => {
@@ -224,6 +224,18 @@ describe('assertPathContained()', () => {
 
   it('throws on directory traversal attempt', () => {
     expect(() => assertPathContained('/tmp/project/../etc/passwd', '/tmp/project')).toThrow('Path escape detected');
+  });
+
+  it('allows paths under an added root', () => {
+    addAllowedRoot('/tmp/extra');
+    try {
+      expect(() => assertPathContained('/tmp/extra/file.ts', '/tmp/project')).not.toThrow();
+      expect(() => assertPathContained('/tmp/extra/nested/deep.ts', '/tmp/project')).not.toThrow();
+      // Still rejects paths outside all roots.
+      expect(() => assertPathContained('/tmp/other/x', '/tmp/project')).toThrow('Path escape detected');
+    } finally {
+      clearAllowedRoots();
+    }
   });
 });
 

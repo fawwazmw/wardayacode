@@ -15,6 +15,7 @@ import type { McpManager } from '../mcp/McpManager.js';
 import { ContextManager } from '../context/ContextManager.js';
 import { ChatView, type ChatMessage, type ExpandedOutput } from './ChatView.js';
 import type { SessionMessage } from '../types.js';
+import { addAllowedRoot } from '../tools/pathSafety.js';
 import { InputBar } from './InputBar.js';
 import { StatusBar } from './StatusBar.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
@@ -147,6 +148,7 @@ export function App({
   // state rather than being read straight from props.
   const [session, setSession] = useState<Session>(initialSession);
   const [modelId, setModelId] = useState(model);
+  const [directories, setDirectories] = useState<string[]>([process.cwd()]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streamingText, setStreamingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -165,6 +167,8 @@ export function App({
   sessionNameRef.current = sessionName;
   const effortLevelRef = useRef(effortLevel);
   effortLevelRef.current = effortLevel;
+  const directoriesRef = useRef(directories);
+  directoriesRef.current = directories;
   const abortRef = useRef<AbortController | null>(null);
 
   // Full output of the most-recent tool call, toggled by ctrl+o. It renders in
@@ -566,6 +570,12 @@ export function App({
       getPluginsInfo: () => pluginsInfo(),
       trustPlugins: () => trustPlugins(),
       reloadPlugins: () => reloadPlugins(),
+      getDirectories: () => directoriesRef.current,
+      addDirectory: (dir: string) => {
+        const abs = addAllowedRoot(dir);
+        setDirectories(prev => (prev.includes(abs) ? prev : [...prev, abs]));
+        return `Added working directory: ${abs}`;
+      },
       getSandboxEnabled: () => permissions.isSandboxEnabled(),
       setSandboxEnabled: (enabled: boolean) => {
         // Sandbox is a first-class gate in PermissionSystem, independent of the

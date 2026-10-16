@@ -6,7 +6,7 @@
 [![npm](https://img.shields.io/npm/v/wardayacode)](https://www.npmjs.com/package/wardayacode)
 [![CI](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml/badge.svg)](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-494-brightgreen)](https://github.com/fawwazmw/wardayacode)
+[![Tests](https://img.shields.io/badge/tests-506-brightgreen)](https://github.com/fawwazmw/wardayacode)
 
 <p align="center">
   <img src="docs/wardayacode-demo.png" alt="WardayaCode terminal UI" width="720">
@@ -55,7 +55,7 @@ Type any task in natural language. The agent reads your files, makes edits, runs
 
 - **Multi-provider** — Anthropic Claude, OpenAI GPT, Google Gemini. Switch at runtime with `/model`.
 - **Permission controls** — Four modes (`default`, `plan`, `acceptEdits`, `auto`) gate every tool call.
-- **44 slash commands** — Full command catalog with tabbed help dialog. Type `/help` to browse.
+- **46 slash commands** — Full command catalog with tabbed help dialog. Type `/help` to browse.
 - **Session management** — Auto-saved conversations, resume across restarts, export to markdown.
 - **Undo & checkpoint** — Revert file edits, git stashing, diff viewing.
 - **Extensible** — MCP server support, skills, hooks, and plugins (see [Extensibility](#extensibility)).
@@ -130,6 +130,7 @@ Type `/` in the TUI to open the command palette, or browse the full catalog with
 | `/skills`     | List loaded skills                 |
 | `/hooks`      | Show hook status (`/hooks trust`)  |
 | `/plugins`    | Manage plugins (list, trust, reload)|
+| `/add-dir`    | Add another working directory      |
 | `/permissions`| Show active permission rules       |
 | `/doctor`     | Installation diagnostics           |
 | `/feedback`   | Submit feedback                    |
