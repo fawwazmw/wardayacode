@@ -60,6 +60,17 @@ describe('isNewerVersion', () => {
     expect(isNewerVersion('1.2', '1.2.0')).toBe(false);
     expect(isNewerVersion('1.3', '1.2.9')).toBe(true);
   });
+
+  it('treats a release as newer than its own pre-release', () => {
+    expect(isNewerVersion('1.2.3', '1.2.3-rc.1')).toBe(true);
+    expect(isNewerVersion('1.2.3-rc.1', '1.2.3')).toBe(false);
+  });
+
+  it('orders pre-release identifiers', () => {
+    expect(isNewerVersion('1.2.3-rc.2', '1.2.3-rc.1')).toBe(true);
+    expect(isNewerVersion('1.2.3-beta', '1.2.3-alpha')).toBe(true);
+    expect(isNewerVersion('1.2.3-rc.1', '1.2.3-rc.2')).toBe(false);
+  });
 });
 
 describe('fetchLatestVersion', () => {

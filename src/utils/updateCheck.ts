@@ -66,24 +66,74 @@ export async function fetchLatestVersion(): Promise<string | null> {
   }
 }
 
-/**
- * Compares two semver-ish version strings (x.y.z). A leading "v" and any
- * pre-release/build suffix (after "-" or "+") are ignored. Returns true when
- * `latest` is strictly greater than `current`.
- */
-export function isNewerVersion(latest: string, current: string): boolean {
-  const parse = (v: string): number[] =>
-    v.replace(/^v/, '').split(/[-+]/)[0]!.split('.').map(n => parseInt(n, 10) || 0);
+interface ParsedVersion {
+  core: number[];
+  pre: string | null;
+}
 
-  const a = parse(latest);
-  const b = parse(current);
+function parseVersion(v: string): ParsedVersion {
+  const cleaned = v.trim().replace(/^v/, '');
+  const plusIdx = cleaned.indexOf('+');
+  const withoutBuild = plusIdx === -1 ? cleaned : cleaned.slice(0, plusIdx);
+  const dashIdx = withoutBuild.indexOf('-');
+  const coreRaw = dashIdx === -1 ? withoutBuild : withoutBuild.slice(0, dashIdx);
+  const preRaw = dashIdx === -1 ? '' : withoutBuild.slice(dashIdx + 1);
+  const core = coreRaw.split('.').map(n => parseInt(n, 10) || 0);
+  return { core, pre: preRaw.length > 0 ? preRaw : null };
+}
+
+function compareCore(a: number[], b: number[]): number {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     const x = a[i] ?? 0;
     const y = b[i] ?? 0;
-    if (x > y) return true;
-    if (x < y) return false;
+    if (x !== y) return x < y ? -1 : 1;
   }
-  return false;
+  return 0;
+}
+
+/** semver pre-release precedence: numeric < alphanumeric, shorter < longer. */
+function comparePrerelease(a: string, b: string): number {
+  const pa = a.split('.');
+  const pb = b.split('.');
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i];
+    const y = pb[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    const xn = /^\d+$/.test(x);
+    const yn = /^\d+$/.test(y);
+    if (xn && yn) {
+      const dx = parseInt(x, 10);
+      const dy = parseInt(y, 10);
+      if (dx !== dy) return dx < dy ? -1 : 1;
+    } else if (xn) {
+      return -1;
+    } else if (yn) {
+      return 1;
+    } else if (x !== y) {
+      return x < y ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Returns true when `latest` is a strictly higher semver than `current`.
+ * Handles a leading `v`, build metadata (`+...`), and pre-release identifiers
+ * (a pre-release is lower than its corresponding release).
+ */
+export function isNewerVersion(latest: string, current: string): boolean {
+  const l = parseVersion(latest);
+  const c = parseVersion(current);
+
+  const core = compareCore(l.core, c.core);
+  if (core !== 0) return core > 0;
+
+  // Same core version: a release outranks a pre-release.
+  if (l.pre === null && c.pre === null) return false;
+  if (l.pre === null) return true;
+  if (c.pre === null) return false;
+  return comparePrerelease(l.pre, c.pre) > 0;
 }
 
 /**
