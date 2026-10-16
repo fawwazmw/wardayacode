@@ -31,8 +31,8 @@ export interface AgentConfig {
 
 export interface AgentEvents {
   'text-delta': (delta: string) => void;
-  'tool-call-start': (payload: { toolName: string; args: Record<string, unknown> }) => void;
-  'tool-call-result': (payload: { toolName: string; result: ToolResult }) => void;
+  'tool-call-start': (payload: { toolName: string; args: Record<string, unknown>; toolCallId?: string }) => void;
+  'tool-call-result': (payload: { toolName: string; result: ToolResult; toolCallId?: string }) => void;
   'error': (error: Error) => void;
   'retry': (payload: { attempt: number; maxRetries: number; delayMs: number; error: string }) => void;
   'usage': (payload: { promptTokens: number; completionTokens: number; totalTokens: number }) => void;
@@ -101,8 +101,8 @@ export class Agent extends EventEmitter<AgentEvents> {
       tools[def.name] = {
         description: def.description,
         parameters: this.jsonSchemaToZod(def.inputSchema),
-        execute: async (args: Record<string, unknown>) => {
-          return this.executeTool(def.name, args);
+        execute: async (args: Record<string, unknown>, options: { toolCallId?: string }) => {
+          return this.executeTool(def.name, args, options?.toolCallId);
         },
       };
     }
@@ -176,7 +176,11 @@ export class Agent extends EventEmitter<AgentEvents> {
     return z.object(shape);
   }
 
-  private async executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+  private async executeTool(name: string, args: Record<string, unknown>, toolCallId?: string): Promise<string> {
+    // Emit start before the gates so denied/blocked calls are still visible and
+    // persisted (a matching tool-result always follows).
+    this.emit('tool-call-start', { toolName: name, args, toolCallId });
+
     // Pre-tool-use hook — can modify args or block execution
     if (this.hookSystem) {
       const hookResult = await this.emitHook('preToolUse', { toolName: name, toolInput: args });
@@ -186,7 +190,7 @@ export class Agent extends EventEmitter<AgentEvents> {
           error: `Blocked by hook: ${hookResult.reason ?? 'No reason provided'}`,
         };
         logger.warn('tool blocked by hook', { tool: name, reason: hookResult.reason });
-        this.emit('tool-call-result', { toolName: name, result: deniedResult });
+        this.emit('tool-call-result', { toolName: name, result: deniedResult, toolCallId });
         return JSON.stringify(deniedResult);
       }
       // Use modified input if the hook changed it
@@ -203,12 +207,11 @@ export class Agent extends EventEmitter<AgentEvents> {
         error: `Permission denied: ${permissionResult.reason ?? 'No reason provided'}`,
       };
       logger.warn('tool denied', { tool: name, reason: permissionResult.reason });
-      this.emit('tool-call-result', { toolName: name, result: deniedResult });
+      this.emit('tool-call-result', { toolName: name, result: deniedResult, toolCallId });
       return JSON.stringify(deniedResult);
     }
 
     logger.debug('tool call', { tool: name, args });
-    this.emit('tool-call-start', { toolName: name, args });
 
     const start = Date.now();
     const result = await this.toolRegistry.execute(name, args);
@@ -219,7 +222,7 @@ export class Agent extends EventEmitter<AgentEvents> {
       logger.warn('tool failed', { tool: name, error: result.error, durationMs });
     }
 
-    this.emit('tool-call-result', { toolName: name, result });
+    this.emit('tool-call-result', { toolName: name, result, toolCallId });
 
     // Post-tool-use hook
     await this.emitHook('postToolUse', { toolName: name, toolInput: args, toolResult: result });
