@@ -14,6 +14,7 @@ import type { Checkpoint } from '../tools/Checkpoint.js';
 import type { McpManager } from '../mcp/McpManager.js';
 import { ContextManager } from '../context/ContextManager.js';
 import { ChatView, type ChatMessage, type ExpandedOutput } from './ChatView.js';
+import type { SessionMessage } from '../types.js';
 import { InputBar } from './InputBar.js';
 import { StatusBar } from './StatusBar.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
@@ -59,6 +60,56 @@ interface PendingPermission {
   resolve: (decision: 'allow' | 'deny' | 'always') => void;
 }
 
+/** Rebuild the agent context from a loaded session transcript (text + tools). */
+function seedContextFromMessages(ctx: ContextManager, msgs: SessionMessage[]): void {
+  ctx.clear();
+  for (const m of msgs) {
+    if (m.type === 'tool_use' || m.type === 'tool_result') {
+      ctx.addMessage({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        type: m.type,
+        ...(m.toolName ? { toolName: m.toolName } : {}),
+        ...(m.toolInput ? { toolInput: m.toolInput } : {}),
+        ...(m.toolResult ? { toolResult: m.toolResult } : {}),
+        ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
+        timestamp: m.timestamp,
+      });
+    } else if (m.role === 'user' || m.role === 'assistant') {
+      ctx.addMessage({ id: m.id, role: m.role, content: m.content, timestamp: m.timestamp });
+    }
+  }
+}
+
+/** Build the display transcript (text turns + tool calls) from a session. */
+function toDisplayMessages(msgs: SessionMessage[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  for (const m of msgs) {
+    if (m.type === 'tool_use') {
+      out.push({
+        type: 'tool_call',
+        toolName: m.toolName ?? 'unknown',
+        args: m.toolInput ?? {},
+        ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
+      });
+    } else if (m.type === 'tool_result') {
+      for (let i = out.length - 1; i >= 0; i--) {
+        const call = out[i]!;
+        if (call.type !== 'tool_call' || call.result) continue;
+        const matches = m.toolCallId ? call.toolCallId === m.toolCallId : call.toolName === m.toolName;
+        if (matches) {
+          call.result = m.toolResult ?? { success: false };
+          break;
+        }
+      }
+    } else if (m.role === 'user' || m.role === 'assistant') {
+      out.push({ type: 'text', role: m.role, content: m.content });
+    }
+  }
+  return out;
+}
+
 export function App({
   agent,
   session: initialSession,
@@ -97,15 +148,10 @@ export function App({
   const [effortLevel, setEffortLevel] = useState('medium');
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const [pendingMcp, setPendingMcp] = useState<{ name: string; command: string; resolve: (ok: boolean) => void } | null>(null);
-  const [sandboxEnabled, setSandboxEnabled] = useState(false);
-  const sandboxRef = useRef(sandboxEnabled);
-  sandboxRef.current = sandboxEnabled;
   const sessionNameRef = useRef(sessionName);
   sessionNameRef.current = sessionName;
   const effortLevelRef = useRef(effortLevel);
   effortLevelRef.current = effortLevel;
-  const sandboxEnabledRef = useRef(sandboxEnabled);
-  sandboxEnabledRef.current = sandboxEnabled;
   const abortRef = useRef<AbortController | null>(null);
 
   // Full output of the most-recent tool call, toggled by ctrl+o. It renders in
@@ -138,7 +184,7 @@ export function App({
           const content = msg.result.success
             ? msg.result.content ?? ''
             : msg.result.error ?? msg.result.content ?? '';
-          if (content.trim() === '') return;
+          if (content.trim() === '') continue;
           setExpanded({ toolName: msg.toolName, content });
           return;
         }
@@ -180,6 +226,17 @@ export function App({
     });
   }, [permissions]);
 
+  // Seed the transcript and agent context from an existing session when the
+  // process was launched with --resume (the in-session /resume path seeds its
+  // own state, but startup resume previously showed an empty conversation).
+  React.useEffect(() => {
+    const existing = initialSession.getMessages();
+    if (existing.length === 0) return;
+
+    seedContextFromMessages(contextManagerRef.current, existing);
+    setMessages(toDisplayMessages(existing));
+  }, [initialSession]);
+
   const handlePermissionDecision = useCallback((decision: 'allow' | 'deny' | 'always') => {
     if (pendingPermission) {
       pendingPermission.resolve(decision);
@@ -206,13 +263,12 @@ export function App({
       return;
     }
     if (abortRef.current) {
+      // Abort the in-flight request; the run's catch/finally surfaces the
+      // cancellation and clears loading state. Do NOT flip isLoading here, or
+      // a new prompt could start a second concurrent run.
       abortRef.current.abort();
-      abortRef.current = null;
-      setIsLoading(false);
-      setStreamingText('');
-      addSystemMessage('Operation cancelled.');
     }
-  }, [addSystemMessage, pendingPermission, pendingMcp]);
+  }, [pendingPermission, pendingMcp]);
 
   const handleSubmit = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -279,6 +335,10 @@ export function App({
       clearMessages: () => {
         setMessages([]);
         setExpanded(null);
+        // Actually drop the conversation context too — otherwise the next
+        // prompt still carries every "cleared" turn to the model.
+        contextManagerRef.current.clear();
+        setTokenUsage({ input: 0, output: 0 });
       },
       setPermissionMode: (mode) => {
         setCurrentPermissionMode(mode);
@@ -328,30 +388,15 @@ export function App({
         await loaded.load();
         const msgs = loaded.getMessages();
 
-        // Rebuild the live context so the agent actually carries the resumed
-        // history into the next turn — previously this was display-only and the
-        // next prompt was sent with no prior turns.
+        // Rebuild the live context (text + tool turns) so the agent carries the
+        // resumed history into the next turn.
         const ctx = contextManagerRef.current;
-        ctx.clear();
-        for (const m of msgs) {
-          if (m.role === 'user' || m.role === 'assistant') {
-            ctx.addMessage({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              timestamp: m.timestamp,
-            });
-          }
-        }
+        seedContextFromMessages(ctx, msgs);
 
         // Swap the active session so subsequent appends land in the resumed
         // transcript rather than the session that was open at startup.
         setSession(loaded);
-        setMessages(msgs.map(m => ({
-          type: 'text' as const,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })));
+        setMessages(toDisplayMessages(msgs));
         setTokenUsage({ input: 0, output: 0 });
         sessionStartRef.current = Date.now();
         return `Resumed session ${match.id.slice(0, 8)} (${msgs.length} messages)`;
@@ -496,18 +541,11 @@ export function App({
       },
       getHooksInfo: () => hooksInfo(),
       trustHooks: () => trustHooks(),
-      getSandboxEnabled: () => sandboxRef.current,
+      getSandboxEnabled: () => permissions.isSandboxEnabled(),
       setSandboxEnabled: (enabled: boolean) => {
-        setSandboxEnabled(enabled);
-        if (enabled) {
-          permissions.addRule({ tool: 'bash', action: 'deny', reason: 'Blocked by sandbox mode' });
-          permissions.addRule({ tool: 'git', action: 'deny', reason: 'Blocked by sandbox mode' });
-          permissions.addRule({ tool: 'write_file', action: 'deny', reason: 'Blocked by sandbox mode' });
-          permissions.addRule({ tool: 'edit_file', action: 'deny', reason: 'Blocked by sandbox mode' });
-        } else {
-          // Reload current mode to clear sandbox rules
-          permissions.setMode(permissions.getMode());
-        }
+        // Sandbox is a first-class gate in PermissionSystem, independent of the
+        // permission mode, so /mode changes can't silently drop it.
+        permissions.setSandbox(enabled);
       },
       runSecurityReview: async () => {
         const d = await checkpoint.getDiffSummary();
@@ -703,11 +741,16 @@ export function App({
     setIsLoading(true);
     setStreamingText('');
 
-    await session.append({
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: text,
-    });
+    try {
+      await session.append({
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: text,
+      });
+    } catch {
+      // A failed disk write must not leave the UI stuck with isLoading=true.
+      addSystemMessage('Warning: failed to save this message to the session file.');
+    }
 
     const ctx = contextManagerRef.current;
     ctx.addCoreMessage('user', text);
@@ -729,39 +772,82 @@ export function App({
       setStreamingText(prev => prev + delta);
     };
 
-    const toolCallStartHandler = ({ toolName, args }: { toolName: string; args: Record<string, unknown> }) => {
+    const toolCallStartHandler = ({ toolName, args, toolCallId }: { toolName: string; args: Record<string, unknown>; toolCallId?: string }) => {
+      const ctxNow = contextManagerRef.current;
+      const message = {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: '',
+        type: 'tool_use' as const,
+        toolName,
+        toolInput: args,
+        ...(toolCallId ? { toolCallId } : {}),
+        timestamp: Date.now(),
+      };
+      ctxNow.addMessage(message);
+      void session.append({ ...message }).catch(() => {});
+
       setMessages(prev => [...prev, {
         type: 'tool_call',
         toolName,
         args,
+        ...(toolCallId ? { toolCallId } : {}),
         startedAt: Date.now(),
       }]);
     };
 
-    const toolCallResultHandler = ({ toolName, result }: { toolName: string; result: { success: boolean; content?: string; error?: string } }) => {
+    const toolCallResultHandler = ({ toolName, result, toolCallId }: { toolName: string; result: { success: boolean; content?: string; error?: string }; toolCallId?: string }) => {
+      const ctxNow = contextManagerRef.current;
+      const resultMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: JSON.stringify(result),
+        type: 'tool_result' as const,
+        toolName,
+        toolResult: result,
+        ...(toolCallId ? { toolCallId } : {}),
+        timestamp: Date.now(),
+      };
+      ctxNow.addMessage(resultMessage);
+      void session.append({ ...resultMessage }).catch(() => {});
+
       setMessages(prev => {
         const updated = [...prev];
         for (let i = updated.length - 1; i >= 0; i--) {
           const msg = updated[i]!;
-          if (msg.type === 'tool_call' && msg.toolName === toolName && !msg.result) {
+          if (msg.type !== 'tool_call' || msg.result) continue;
+          const matches = toolCallId ? msg.toolCallId === toolCallId : msg.toolName === toolName;
+          if (matches) {
             updated[i] = {
               type: 'tool_call',
               toolName: msg.toolName,
               args: msg.args,
               result,
+              ...(msg.toolCallId ? { toolCallId: msg.toolCallId } : {}),
               startedAt: msg.startedAt,
               durationMs: msg.startedAt !== undefined ? Date.now() - msg.startedAt : undefined,
             };
-            break;
+            return updated;
           }
         }
+        // No in-progress call matched (should be rare now that start is always
+        // emitted first). Surface it rather than drop the event.
+        updated.push({
+          type: 'tool_call',
+          toolName,
+          args: {},
+          result,
+          ...(toolCallId ? { toolCallId } : {}),
+          startedAt: Date.now(),
+          durationMs: 0,
+        });
         return updated;
       });
     };
 
     const retryHandler = ({ attempt, maxRetries, delayMs, error }: { attempt: number; maxRetries: number; delayMs: number; error: string }) => {
       const delaySec = (delayMs / 1000).toFixed(1);
-      addSystemMessage(`Retrying (attempt ${attempt + 1}/${maxRetries + 1}) in ${delaySec}s — ${error}`);
+      addSystemMessage(`Retrying (attempt ${attempt}/${maxRetries + 1}) in ${delaySec}s — ${error}`);
     };
 
     const usageHandler = ({ promptTokens, completionTokens }: { promptTokens: number; completionTokens: number; totalTokens: number }) => {
@@ -779,18 +865,20 @@ export function App({
 
     const startedAt = Date.now();
     try {
-      const response = await agent.run(newHistory);
+      const response = await agent.run(newHistory, abortRef.current?.signal);
       const durationMs = Date.now() - startedAt;
 
       setStreamingText('');
-      setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response, durationMs }]);
-      ctx.addCoreMessage('assistant', response);
+      if (response.trim().length > 0) {
+        setMessages(prev => [...prev, { type: 'text', role: 'assistant', content: response, durationMs }]);
+        ctx.addCoreMessage('assistant', response);
 
-      await session.append({
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: response,
-      });
+        await session.append({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: response,
+        });
+      }
     } catch (error) {
       setStreamingText('');
       if ((error as Error).name === 'AbortError') {
@@ -838,6 +926,7 @@ export function App({
             messages={messages}
             streamingText={streamingText}
             themeMode={themeMode}
+            resetKey={session.getId()}
             expandedOutput={expandedOutput}
           />
         )}

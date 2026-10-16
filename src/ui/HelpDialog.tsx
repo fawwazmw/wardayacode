@@ -57,7 +57,7 @@ const HELP_COMMANDS: HelpCommand[] = [
   { name: '/keybindings', desc: 'Open or create your keybindings configuration file' },
   { name: '/mcp', desc: 'Manage MCP servers' },
   { name: '/memory', desc: 'Edit Wardaya memory files' },
-  { name: '/model', desc: 'Set the AI model for WardayaCode' },
+  { name: '/model', desc: 'Show the current AI model' },
   { name: '/permissions', desc: 'Manage allow & deny tool permission rules' },
   { name: '/plan', desc: 'Enable plan mode or view the current session plan' },
   { name: '/rename', desc: 'Rename the current conversation' },

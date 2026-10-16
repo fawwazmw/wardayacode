@@ -4,7 +4,7 @@ import EventEmitter from 'eventemitter3';
 import type { ToolRegistry } from '../tools/ToolRegistry.js';
 import type { PermissionSystem } from '../permissions/PermissionSystem.js';
 import type { HookSystem } from '../extensibility/HookSystem.js';
-import type { ToolResult } from '../types.js';
+import type { ToolResult, HookResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { isRetryableError, getRetryDelay, sleep } from '../utils/retry.js';
 import { injectCwdReminder } from './cwdReminder.js';
@@ -25,12 +25,14 @@ export interface AgentConfig {
    * prior, which keeps models from inventing sandbox-style paths.
    */
   cwd?: string;
+  /** Session id, surfaced to hooks via the sessionStart event. */
+  sessionId?: string;
 }
 
 export interface AgentEvents {
   'text-delta': (delta: string) => void;
-  'tool-call-start': (payload: { toolName: string; args: Record<string, unknown> }) => void;
-  'tool-call-result': (payload: { toolName: string; result: ToolResult }) => void;
+  'tool-call-start': (payload: { toolName: string; args: Record<string, unknown>; toolCallId?: string }) => void;
+  'tool-call-result': (payload: { toolName: string; result: ToolResult; toolCallId?: string }) => void;
   'error': (error: Error) => void;
   'retry': (payload: { attempt: number; maxRetries: number; delayMs: number; error: string }) => void;
   'usage': (payload: { promptTokens: number; completionTokens: number; totalTokens: number }) => void;
@@ -48,6 +50,7 @@ export class Agent extends EventEmitter<AgentEvents> {
   private readonly maxSteps: number;
   private readonly maxRetries: number;
   private readonly cwd: string | undefined;
+  private readonly sessionId: string | undefined;
   private effort: string;
 
   constructor(config: AgentConfig) {
@@ -62,6 +65,7 @@ export class Agent extends EventEmitter<AgentEvents> {
     this.maxSteps = config.maxSteps ?? 25;
     this.maxRetries = config.maxRetries ?? 3;
     this.cwd = config.cwd;
+    this.sessionId = config.sessionId;
     this.effort = 'medium';
   }
 
@@ -77,17 +81,16 @@ export class Agent extends EventEmitter<AgentEvents> {
     return this.effort;
   }
 
-  /** Emit a hook event and return the modified input if a preToolUse hook changed it. */
+  /** Emit a hook event and return the merged result from all handlers. */
   private async emitHook(
-    event: 'preToolUse' | 'postToolUse' | 'sessionStart' | 'sessionEnd' | 'stop' | 'notification',
+    event: 'preToolUse' | 'postToolUse' | 'sessionStart' | 'sessionEnd' | 'userPromptSubmit' | 'stop' | 'notification',
     context: Record<string, unknown>,
-  ): Promise<Record<string, unknown> | undefined> {
+  ): Promise<HookResult | undefined> {
     if (!this.hookSystem) return undefined;
-    const modified = await this.hookSystem.emitWithResult(event, {
+    return this.hookSystem.emitWithResult(event, {
       event,
       ...context,
     });
-    return modified?.modifiedInput;
   }
 
   private buildTools(): Record<string, CoreTool> {
@@ -98,8 +101,8 @@ export class Agent extends EventEmitter<AgentEvents> {
       tools[def.name] = {
         description: def.description,
         parameters: this.jsonSchemaToZod(def.inputSchema),
-        execute: async (args: Record<string, unknown>) => {
-          return this.executeTool(def.name, args);
+        execute: async (args: Record<string, unknown>, options: { toolCallId?: string }) => {
+          return this.executeTool(def.name, args, options?.toolCallId);
         },
       };
     }
@@ -173,7 +176,11 @@ export class Agent extends EventEmitter<AgentEvents> {
     return z.object(shape);
   }
 
-  private async executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+  private async executeTool(name: string, args: Record<string, unknown>, toolCallId?: string): Promise<string> {
+    // Emit start before the gates so denied/blocked calls are still visible and
+    // persisted (a matching tool-result always follows).
+    this.emit('tool-call-start', { toolName: name, args, toolCallId });
+
     // Pre-tool-use hook — can modify args or block execution
     if (this.hookSystem) {
       const hookResult = await this.emitHook('preToolUse', { toolName: name, toolInput: args });
@@ -183,7 +190,7 @@ export class Agent extends EventEmitter<AgentEvents> {
           error: `Blocked by hook: ${hookResult.reason ?? 'No reason provided'}`,
         };
         logger.warn('tool blocked by hook', { tool: name, reason: hookResult.reason });
-        this.emit('tool-call-result', { toolName: name, result: deniedResult });
+        this.emit('tool-call-result', { toolName: name, result: deniedResult, toolCallId });
         return JSON.stringify(deniedResult);
       }
       // Use modified input if the hook changed it
@@ -200,12 +207,11 @@ export class Agent extends EventEmitter<AgentEvents> {
         error: `Permission denied: ${permissionResult.reason ?? 'No reason provided'}`,
       };
       logger.warn('tool denied', { tool: name, reason: permissionResult.reason });
-      this.emit('tool-call-result', { toolName: name, result: deniedResult });
+      this.emit('tool-call-result', { toolName: name, result: deniedResult, toolCallId });
       return JSON.stringify(deniedResult);
     }
 
     logger.debug('tool call', { tool: name, args });
-    this.emit('tool-call-start', { toolName: name, args });
 
     const start = Date.now();
     const result = await this.toolRegistry.execute(name, args);
@@ -216,7 +222,7 @@ export class Agent extends EventEmitter<AgentEvents> {
       logger.warn('tool failed', { tool: name, error: result.error, durationMs });
     }
 
-    this.emit('tool-call-result', { toolName: name, result });
+    this.emit('tool-call-result', { toolName: name, result, toolCallId });
 
     // Post-tool-use hook
     await this.emitHook('postToolUse', { toolName: name, toolInput: args, toolResult: result });
@@ -224,7 +230,7 @@ export class Agent extends EventEmitter<AgentEvents> {
     return JSON.stringify(result);
   }
 
-  async run(messages: CoreMessage[]): Promise<string> {
+  async run(messages: CoreMessage[], abortSignal?: AbortSignal): Promise<string> {
     const allMessages: CoreMessage[] = [];
 
     if (this.systemPrompt) {
@@ -239,7 +245,13 @@ export class Agent extends EventEmitter<AgentEvents> {
     logger.debug('agent run started', { messageCount: messages.length, model: String(this.model) });
 
     // Session start hook
-    await this.emitHook('sessionStart', { sessionId: this.cwd });
+    await this.emitHook('sessionStart', { sessionId: this.sessionId ?? this.cwd });
+    // User prompt hook — fired once per run with the latest user turn.
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    await this.emitHook('userPromptSubmit', {
+      sessionId: this.sessionId,
+      message: typeof lastUser?.content === 'string' ? lastUser.content : undefined,
+    });
 
     let lastError: Error | null = null;
 
@@ -259,6 +271,7 @@ export class Agent extends EventEmitter<AgentEvents> {
             maxTokens: this.maxTokens,
             temperature: this.temperature,
             maxRetries: 0,
+            ...(abortSignal ? { abortSignal } : {}),
             // Provider-specific reasoning effort. Silently ignored by providers that don't support it.
             ...(this.effort !== 'medium' ? { reasoningEffort: this.effort as 'low' | 'high' } : {}),
             onStepFinish: ({ stepType }) => {

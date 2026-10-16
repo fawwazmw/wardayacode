@@ -113,7 +113,7 @@ export function InputBar({
     if (isLoading) return;
 
     if (key.escape) {
-      if (showPalette) {
+      if (value.length > 0) {
         setValue('');
         setCursorPos(0);
         setPaletteIndex(0);

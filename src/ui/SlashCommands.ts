@@ -367,6 +367,9 @@ export async function handleSlashCommand(
       if (!arg) {
         return { handled: true, output: `Current effort level: ${ctx.getEffort()}\nUsage: /effort <low|medium|high>` };
       }
+      if (!['low', 'medium', 'high'].includes(arg)) {
+        return { handled: true, output: `Invalid effort level: ${arg}\nUsage: /effort <low|medium|high>` };
+      }
       ctx.setEffort(arg);
       return { handled: true, output: `Effort level set to: ${arg}` };
     }

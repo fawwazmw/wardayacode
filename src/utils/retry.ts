@@ -21,7 +21,8 @@ export function getRetryDelay(error: unknown, attempt: number): number {
     }
   }
 
-  const exponential = BASE_DELAY_MS * Math.pow(2, attempt);
+  const exponent = Math.min(attempt, 30); // clamp so Math.pow can't overflow to Infinity/NaN
+  const exponential = BASE_DELAY_MS * Math.pow(2, exponent);
   const jitter = exponential * 0.25 * (Math.random() * 2 - 1);
   return Math.min(Math.round(exponential + jitter), MAX_DELAY_MS);
 }

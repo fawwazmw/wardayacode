@@ -26,11 +26,16 @@ export async function gatherProjectContext(projectRoot: string): Promise<Project
     hasGit: false,
   };
 
+  // Detect language/type sequentially in priority order. Running the detectors
+  // concurrently let a polyglot repo's type be decided by whichever I/O
+  // resolved last (e.g. a Node project with a requirements.txt could be
+  // mislabeled Python).
+  await detectNodeProject(projectRoot, info);
+  if (info.type === 'unknown') await detectRustProject(projectRoot, info);
+  if (info.type === 'unknown') await detectGoProject(projectRoot, info);
+  if (info.type === 'unknown') await detectPythonProject(projectRoot, info);
+
   await Promise.allSettled([
-    detectNodeProject(projectRoot, info),
-    detectPythonProject(projectRoot, info),
-    detectRustProject(projectRoot, info),
-    detectGoProject(projectRoot, info),
     detectGit(projectRoot, info),
     loadContextFile(projectRoot, info),
   ]);
@@ -144,6 +149,8 @@ async function loadContextFile(root: string, info: ProjectInfo): Promise<void> {
   for (const name of CONTEXT_FILE_NAMES) {
     try {
       const content = await fs.readFile(path.join(root, name), 'utf-8');
+      // Skip an empty highest-priority file so it doesn't shadow lower ones.
+      if (content.trim().length === 0) continue;
       info.contextFileContent = content.slice(0, 8000);
       return;
     } catch { continue; }

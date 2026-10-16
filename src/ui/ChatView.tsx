@@ -10,6 +10,8 @@ interface ToolCallMessage {
   toolName: string;
   args: Record<string, unknown>;
   result?: { success: boolean; content?: string; error?: string };
+  /** AI SDK tool-call id (used to match results and persist context). */
+  toolCallId?: string;
   /** Wall-clock time the tool call started, in ms (Date.now()). */
   startedAt?: number;
   /** How long the tool took once finished, in ms. */
@@ -36,6 +38,12 @@ interface ChatViewProps {
   messages: ChatMessage[];
   streamingText: string;
   themeMode: 'dark' | 'light';
+  /**
+   * Changes whenever the transcript is wholesale replaced (e.g. /resume swaps
+   * to a different session). Used to remount <Static> so old scrollback is
+   * discarded instead of leaving stale committed lines behind.
+   */
+  resetKey?: string;
   /**
    * When set, the full output of a tool call is shown in the live region below
    * the transcript. It lives here (not in <Static>) so ctrl+o can toggle it
@@ -146,6 +154,7 @@ export function ChatView({
   messages,
   streamingText,
   themeMode,
+  resetKey,
   expandedOutput,
 }: ChatViewProps): React.ReactElement {
   const colors = inkColors[themeMode];
@@ -160,6 +169,8 @@ export function ChatView({
 
   // <Static> tracks how many items it has already written. If the list shrinks
   // (e.g. /clear resets messages to []), bump a key to remount it cleanly.
+  // A changed resetKey (e.g. /resume) remounts it too, since the transcript was
+  // replaced rather than appended to.
   const epochRef = useRef(0);
   const prevLenRef = useRef(0);
   if (settled.length < prevLenRef.current) {
@@ -169,7 +180,7 @@ export function ChatView({
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      <Static key={epochRef.current} items={settled}>
+      <Static key={`${resetKey ?? ''}-${epochRef.current}`} items={settled}>
         {(msg, idx) => <MessageItem key={idx} msg={msg} themeMode={themeMode} />}
       </Static>
 

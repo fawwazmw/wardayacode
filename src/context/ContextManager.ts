@@ -1,4 +1,4 @@
-import type { CoreMessage } from 'ai';
+import type { CoreMessage, CoreAssistantMessage, CoreToolMessage } from 'ai';
 import { Message, CompactedContext } from '../types.js';
 
 const MAX_TOOL_RESULT_LENGTH = 2000;
@@ -49,12 +49,14 @@ export class ContextManager {
   }
 
   private deduplicateMessages(messages: Message[]): Message[] {
+    // Only collapse exact repeats of the same message id (e.g. an accidental
+    // double-append). Distinct turns that happen to share text ("yes",
+    // "continue") must NOT be merged or the conversation loses a turn.
+    const seen = new Set<string>();
     const result: Message[] = [];
     for (const msg of messages) {
-      const prev = result[result.length - 1];
-      if (prev && prev.role === msg.role && prev.content === msg.content) {
-        continue;
-      }
+      if (seen.has(msg.id)) continue;
+      seen.add(msg.id);
       result.push(msg);
     }
     return result;
@@ -98,6 +100,12 @@ export class ContextManager {
       currentTokens += msgTokens;
     }
 
+    // Anthropic rejects an assistant-first history, so drop leading
+    // assistant/system entries that survived the window.
+    while (kept.length > 0 && kept[0]!.role !== 'user') {
+      kept.shift();
+    }
+
     // Prepend a summary marker if we dropped messages
     if (kept.length < nonSystem.length) {
       const droppedCount = nonSystem.length - kept.length;
@@ -135,9 +143,54 @@ export class ContextManager {
   }
 
   toCoreMessages(): CoreMessage[] {
-    return this.transcript
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    const out: CoreMessage[] = [];
+
+    for (const m of this.transcript) {
+      // Reconstruct tool interactions so the model keeps the evidence of what
+      // it read/ran in earlier turns and across resume.
+      if (m.type === 'tool_use' && m.toolCallId) {
+        const assistant: CoreAssistantMessage = {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool-call',
+              toolCallId: m.toolCallId,
+              toolName: m.toolName ?? 'unknown',
+              args: m.toolInput ?? {},
+            },
+          ],
+        };
+        out.push(assistant);
+        continue;
+      }
+
+      if (m.type === 'tool_result' && m.toolCallId) {
+        const tool: CoreToolMessage = {
+          role: 'tool',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: m.toolCallId,
+              toolName: m.toolName ?? 'unknown',
+              result: m.content,
+            },
+          ],
+        };
+        out.push(tool);
+        continue;
+      }
+
+      if (m.role === 'user' || m.role === 'assistant') {
+        out.push({ role: m.role, content: m.content });
+      }
+    }
+
+    // Anthropic requires the first turn to be a user message.
+    while (out.length > 0 && out[0]!.role !== 'user') {
+      out.shift();
+    }
+
+    return out;
   }
 
   addCoreMessage(role: 'user' | 'assistant', content: string): void {

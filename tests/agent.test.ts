@@ -102,6 +102,29 @@ describe('Agent', () => {
 
     expect(agent).toBeDefined();
   });
+
+  it('blocks a tool when a preToolUse hook denies it', async () => {
+    const { HookSystem } = await import('../src/extensibility/HookSystem.js');
+    const hooks = new HookSystem();
+    hooks.register({
+      event: 'preToolUse',
+      handler: async () => ({ proceed: false, reason: 'denied by policy' }),
+    });
+
+    const agent = new Agent({
+      model: {} as any,
+      toolRegistry,
+      permissions,
+      hookSystem: hooks,
+    });
+
+    const result = await (agent as unknown as {
+      executeTool: (name: string, args: Record<string, unknown>) => Promise<string>;
+    }).executeTool('bash', { command: 'echo hi' });
+
+    expect(result).toContain('Blocked by hook');
+    expect(result).toContain('denied by policy');
+  });
 });
 
 describe('PermissionSystem', () => {
