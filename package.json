@@ -18,7 +18,7 @@
     "build": "tsup src/cli.ts --format esm --dts --clean",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest --coverage",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext .ts,.tsx",
     "type-check": "tsc --noEmit",
     "prepublishOnly": "npm run build"
