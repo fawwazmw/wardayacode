@@ -138,6 +138,8 @@ export async function discoverPlugins(
 export class PluginRuntime {
   private plugins: DiscoveredPlugin[] = [];
   private loadedNames: string[] = [];
+  private registeredToolNames: string[] = [];
+  private registeredHooks: Array<{ event: HookEvent; handler: (context: HookContext) => Promise<HookResult> }> = [];
 
   constructor(
     private readonly registry: ToolRegistry,
@@ -147,6 +149,17 @@ export class PluginRuntime {
   ) {}
 
   async activate(): Promise<DiscoveredPlugin[]> {
+    // Make reloads idempotent: drop registrations from the previous activate()
+    // so tools aren't re-registered and hooks aren't duplicated.
+    for (const name of this.registeredToolNames) {
+      this.registry.unregister(name);
+    }
+    this.registeredToolNames = [];
+    for (const { event, handler } of this.registeredHooks) {
+      this.hookSystem.unregister(event, handler);
+    }
+    this.registeredHooks = [];
+
     const projectTrusted = await this.trustStore.isTrusted(this.projectRoot);
     this.plugins = await discoverPlugins(this.projectRoot, projectTrusted);
     this.loadedNames = [];
@@ -177,14 +190,17 @@ export class PluginRuntime {
       registerTool: tool => {
         const instance = tool instanceof Tool ? tool : new PluginTool(tool as PluginToolDefinition);
         this.registry.register(instance);
+        this.registeredToolNames.push(instance.definition.name);
       },
       registerHook: hook => {
+        const handler = async (context: HookContext) =>
+          (await hook.handler(context)) ?? { proceed: true };
         this.hookSystem.register({
           event: hook.event,
           name: hook.name ?? `${plugin.name}:${hook.event}`,
-          handler: async (context: HookContext) =>
-            (await hook.handler(context)) ?? { proceed: true },
+          handler,
         });
+        this.registeredHooks.push({ event: hook.event, handler });
       },
       log: message => logger.debug(`[plugin ${plugin.name}] ${message}`),
     };
