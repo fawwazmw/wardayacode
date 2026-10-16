@@ -6,7 +6,7 @@
 [![npm](https://img.shields.io/npm/v/wardayacode)](https://www.npmjs.com/package/wardayacode)
 [![CI](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml/badge.svg)](https://github.com/fawwazmw/wardayacode/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-506-brightgreen)](https://github.com/fawwazmw/wardayacode)
+[![Tests](https://img.shields.io/badge/tests-518-brightgreen)](https://github.com/fawwazmw/wardayacode)
 
 <p align="center">
   <img src="docs/wardayacode-demo.png" alt="WardayaCode terminal UI" width="720">
