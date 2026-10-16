@@ -100,6 +100,20 @@ describe('PluginRuntime', () => {
     expect(result?.reason).toBe('nope');
   });
 
+  it('does not duplicate plugin hooks on repeated activate (reload)', async () => {
+    await writePlugin(
+      'guard.mjs',
+      `export const hooks = [{ event: 'preToolUse', handler: () => ({ proceed: true }) }];`,
+    );
+    const hooks = new HookSystem();
+    const runtime = new PluginRuntime(new ToolRegistry(), hooks, tmpRoot, new PluginTrustStore(path.join(tmpRoot, 'trust.json')));
+
+    await runtime.trustProject(); // activates once
+    await runtime.activate(); // reload
+
+    expect(hooks.getHooks('preToolUse')).toHaveLength(1);
+  });
+
   it('reports guidance when no plugins exist', async () => {
     const runtime = new PluginRuntime(new ToolRegistry(), new HookSystem(), tmpRoot, new PluginTrustStore(path.join(tmpRoot, 'trust.json')));
     await runtime.activate();
