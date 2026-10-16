@@ -88,7 +88,7 @@ describe('HelpDialog', () => {
     stdin.write(RIGHT);
     await tickMs();
     const out = lastFrame() ?? '';
-    expect(out).toContain('No custom commands yet.');
+    expect(out).toContain('Custom commands are not supported yet.');
   });
 
   it('Left arrow from General wraps to Custom Commands', async () => {
@@ -99,7 +99,7 @@ describe('HelpDialog', () => {
     stdin.write(LEFT);
     await tickMs();
     const out = lastFrame() ?? '';
-    expect(out).toContain('No custom commands yet.');
+    expect(out).toContain('Custom commands are not supported yet.');
   });
 
   it('Esc closes the dialog', async () => {

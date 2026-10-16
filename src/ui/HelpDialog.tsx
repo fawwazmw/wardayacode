@@ -262,11 +262,10 @@ function CustomCommandsSection({ themeMode }: { themeMode: 'dark' | 'light' }): 
   const colors = inkColors[themeMode];
   return (
     <Box flexDirection="column">
-      <Text color={colors.muted}>No custom commands yet.</Text>
+      <Text color={colors.muted}>Custom commands are not supported yet.</Text>
       <Box marginTop={1}>
         <Text color={colors.muted} dimColor>
-          Define your own commands as <Text color={colors.accent}>.md</Text> files in{' '}
-          <Text color={colors.accent}>.wardayacode/commands/</Text> to see them here.
+          Use child sessions or MCP servers to add custom tooling.
         </Text>
       </Box>
     </Box>
