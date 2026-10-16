@@ -322,6 +322,9 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
 
   const currentVersion = getCurrentVersion();
 
+  // Tracks the active model so side questions (/anw) use the switched model too.
+  let activeLanguageModel = model;
+
   // Runtime model switching. Accepts a bare model id (provider inferred from
   // its prefix, else the current provider) or "provider/model".
   const PROVIDER_MODEL_PREFIXES: Array<[ProviderName, string[]]> = [
@@ -370,6 +373,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
         temperature: config.temperature,
       });
       agent.setModel(next);
+      activeLanguageModel = next;
       return `Model switched to ${modelId} (${provider}).`;
     } catch (error) {
       return `Failed to switch model: ${error instanceof Error ? error.message : String(error)}`;
@@ -380,7 +384,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     // Ink owns the terminal — route logs to the file only so warn/error lines
     // don't corrupt the frame or duplicate messages the UI already shows.
     logger.setConsoleOutput(false);
-    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, hookRuntime, pluginRuntime, switchModel, currentVersion, initialPrompt);
+    runTUI(agent, session, config, model, () => activeLanguageModel, undoManager, checkpoint, permissions, mcpManager, hookRuntime, pluginRuntime, switchModel, currentVersion, initialPrompt);
   } else {
     await runPlainText(agent, session, permissions, mcpManager, currentVersion, initialPrompt);
   }
@@ -398,6 +402,7 @@ function runTUI(
     maxRetries: number;
   },
   languageModel: LanguageModel,
+  getActiveModel: () => LanguageModel,
   undoManager: UndoManager,
   checkpoint: Checkpoint,
   permissions: PermissionSystem,
@@ -421,6 +426,7 @@ function runTUI(
         session,
         model: config.model,
         languageModel,
+        getActiveModel,
         permissionMode: config.permissionMode,
         themeMode: config.theme,
         undoManager,
