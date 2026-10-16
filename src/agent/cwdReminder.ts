@@ -12,10 +12,14 @@ const CWD_REMINDER_MARKER = '<cwd-reminder>';
  * working directory right next to the user's request is the most reliable way
  * to stop the model inventing a sandbox-style path.
  */
-export function buildCwdReminder(cwd: string): string {
+export function buildCwdReminder(cwd: string, extraRoots: string[] = []): string {
+  const extras =
+    extraRoots.length > 0
+      ? ` Additional allowed directories (via /add-dir): ${extraRoots.join(', ')}.`
+      : '';
   return (
     `${CWD_REMINDER_MARKER} The working directory is exactly: ${cwd}. ` +
-    `All paths resolve against it. Never invent or guess any other location ` +
+    `All paths resolve against it.${extras} Never invent or guess any other location ` +
     `(no "/Users/...", "/workspace/...", or sandbox-style paths).`
   );
 }
@@ -43,6 +47,7 @@ function alreadyInjected(content: CoreMessage['content']): boolean {
 export function injectCwdReminder(
   messages: CoreMessage[],
   cwd: string,
+  extraRoots: string[] = [],
 ): CoreMessage[] {
   // Find the last user message.
   let lastUserIdx = -1;
@@ -57,7 +62,7 @@ export function injectCwdReminder(
   const target = messages[lastUserIdx] as CoreUserMessage;
   if (alreadyInjected(target.content)) return messages;
 
-  const reminder = buildCwdReminder(cwd);
+  const reminder = buildCwdReminder(cwd, extraRoots);
   const reminderPart: TextPart = { type: 'text', text: reminder };
 
   let nextContent: CoreUserMessage['content'];

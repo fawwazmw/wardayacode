@@ -8,6 +8,7 @@ import type { ToolResult, HookResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { isRetryableError, getRetryDelay, sleep } from '../utils/retry.js';
 import { injectCwdReminder } from './cwdReminder.js';
+import { getAllowedRoots } from '../tools/pathSafety.js';
 
 export interface AgentConfig {
   model: LanguageModel;
@@ -242,7 +243,7 @@ export class Agent extends EventEmitter<AgentEvents> {
       allMessages.push({ role: 'system', content: this.systemPrompt });
     }
 
-    const userMessages = this.cwd ? injectCwdReminder(messages, this.cwd) : messages;
+    const userMessages = this.cwd ? injectCwdReminder(messages, this.cwd, getAllowedRoots()) : messages;
     allMessages.push(...userMessages);
 
     const tools = this.buildTools();
