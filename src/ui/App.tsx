@@ -46,6 +46,8 @@ interface AppProps {
   hooksInfo: () => Promise<string>;
   /** Trust the current project's hooks and activate them. */
   trustHooks: () => Promise<string>;
+  /** Swap the active model at runtime; returns a human-readable result. */
+  switchModel: (modelId: string) => Promise<string>;
   maxTokens: number;
   temperature: number;
   maxRetries: number;
@@ -124,6 +126,7 @@ export function App({
   version,
   hooksInfo,
   trustHooks,
+  switchModel,
   maxTokens,
   temperature,
   maxRetries,
@@ -134,6 +137,7 @@ export function App({
   // The active session can be swapped at runtime by /resume, so it lives in
   // state rather than being read straight from props.
   const [session, setSession] = useState<Session>(initialSession);
+  const [modelId, setModelId] = useState(model);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streamingText, setStreamingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -348,7 +352,12 @@ export function App({
       getSessionId: () => session.getId(),
       getSessionName: () => sessionNameRef.current,
       setSessionName: (name) => setSessionName(name),
-      getModel: () => model,
+      getModel: () => modelId,
+      switchModel: async (id: string) => {
+        const result = await switchModel(id);
+        if (result.startsWith('Model switched')) setModelId(id);
+        return result;
+      },
       getVersion: () => version,
       getPermissionMode: () => currentPermissionMode,
       getTokenUsage: () => tokenUsage,
@@ -474,7 +483,7 @@ export function App({
       },
       getAgentConfigSummary: () => {
         return [
-          `Model:        ${model}`,
+          `Model:        ${modelId}`,
           `Permission:   ${currentPermissionMode}`,
           `Effort:       ${effortLevelRef.current}`,
           `Max tokens:   ${maxTokens}`,
@@ -613,7 +622,7 @@ export function App({
       },
       getConfigSummary: () => {
         return [
-          `Model:     ${model}`,
+          `Model:     ${modelId}`,
           `Version:   ${version}`,
           `Theme:     ${themeMode}`,
           `Mode:      ${currentPermissionMode}`,
@@ -896,7 +905,7 @@ export function App({
       abortRef.current = null;
       setIsLoading(false);
     }
-  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, model, addSystemMessage, undoManager, checkpoint, permissions, mcpManager, setExpanded]);
+  }, [agent, session, exit, currentPermissionMode, tokenUsage, messages.length, modelId, addSystemMessage, undoManager, checkpoint, permissions, mcpManager, setExpanded]);
 
   React.useEffect(() => {
     if (initialPrompt) {
@@ -912,7 +921,7 @@ export function App({
       <Box flexGrow={1}>
         {showWelcome ? (
           <WelcomeScreen
-            model={model}
+            model={modelId}
             permissionMode={currentPermissionMode}
             sessionId={session.getId()}
             cwd={process.cwd()}
@@ -970,7 +979,7 @@ export function App({
       />
 
       <StatusBar
-        model={model}
+        model={modelId}
         tokenUsage={tokenUsage}
         permissionMode={currentPermissionMode}
         sessionId={session.getId()}

@@ -41,7 +41,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/compact', description: 'Manually compact context to free tokens' },
   { name: '/session', description: 'Show current session info' },
   { name: '/mode', description: 'Change permission mode', args: '<mode>' },
-  { name: '/model', description: 'Show current model' },
+  { name: '/model', description: 'Show or switch the model', args: '<model-id>' },
   { name: '/tokens', description: 'Show token usage' },
   { name: '/login', description: 'Save provider API key', args: '<provider> <apiKey>' },
   { name: '/logout', description: 'Remove stored provider API key', args: '<provider>' },
@@ -82,6 +82,8 @@ export interface SlashCommandContext {
   getSessionName: () => string;
   setSessionName: (name: string) => void;
   getModel: () => string;
+  /** Swap the active model at runtime; returns a human-readable result. */
+  switchModel: (modelId: string) => Promise<string>;
   getVersion: () => string;
   getPermissionMode: () => PermissionMode;
   /** Human-readable list of the active permission rules. */
@@ -495,8 +497,15 @@ export async function handleSlashCommand(
       return { handled: true, output: `Permission mode changed to: ${arg}` };
     }
 
-    case '/model':
-      return { handled: true, output: `Model: ${ctx.getModel()}` };
+    case '/model': {
+      if (!arg) {
+        return {
+          handled: true,
+          output: `Model: ${ctx.getModel()}\nUsage: /model <model-id>  (e.g. claude-opus-4-1, gpt-4o-mini, gemini-2.0-flash)`,
+        };
+      }
+      return { handled: true, output: await ctx.switchModel(arg) };
+    }
 
     case '/tokens': {
       const usage = ctx.getTokenUsage();
