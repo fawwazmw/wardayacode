@@ -53,6 +53,7 @@ const HELP_COMMANDS: HelpCommand[] = [
   { name: '/feedback', desc: 'Submit feedback about WardayaCode' },
   { name: '/help', desc: 'Show help and available commands' },
   { name: '/hooks', desc: 'View hook configurations for tool events' },
+  { name: '/plugins', desc: 'Manage plugins (list, trust, reload)' },
   { name: '/init', desc: 'Initialize a new WARDAYA.md file with codebase documentation' },
   { name: '/keybindings', desc: 'Open or create your keybindings configuration file' },
   { name: '/mcp', desc: 'Manage MCP servers' },

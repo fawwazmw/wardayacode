@@ -21,6 +21,7 @@ import { PermissionSystem } from './permissions/PermissionSystem.js';
 import { McpManager } from './mcp/McpManager.js';
 import { HookSystem } from './extensibility/HookSystem.js';
 import { HookRuntime } from './extensibility/hookLoader.js';
+import { PluginRuntime } from './extensibility/pluginLoader.js';
 import { SkillSystem } from './extensibility/SkillSystem.js';
 import { loadSkills } from './extensibility/skillLoader.js';
 import { Agent } from './agent/index.js';
@@ -276,6 +277,12 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
   const hookRuntime = new HookRuntime(hooks, projectRoot);
   await hookRuntime.activate();
 
+  // Load trusted plugins (registers their tools/hooks). Project plugins stay
+  // inactive until trust via `/plugins trust`. Runs after hooks so it can add
+  // plugin hooks on top of the hook scripts.
+  const pluginRuntime = new PluginRuntime(toolRegistry, hooks, projectRoot);
+  await pluginRuntime.activate();
+
   // Load user-defined skills and expose them to the agent via the system prompt.
   const skillSystem = new SkillSystem();
   for (const skill of await loadSkills(projectRoot)) {
@@ -339,7 +346,7 @@ async function run(initialPrompt: string | undefined, options: CLIOptions): Prom
     // Ink owns the terminal — route logs to the file only so warn/error lines
     // don't corrupt the frame or duplicate messages the UI already shows.
     logger.setConsoleOutput(false);
-    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, hookRuntime, switchModel, currentVersion, initialPrompt);
+    runTUI(agent, session, config, model, undoManager, checkpoint, permissions, mcpManager, hookRuntime, pluginRuntime, switchModel, currentVersion, initialPrompt);
   } else {
     await runPlainText(agent, session, permissions, mcpManager, currentVersion, initialPrompt);
   }
@@ -362,6 +369,7 @@ function runTUI(
   permissions: PermissionSystem,
   mcpManager: McpManager,
   hookRuntime: HookRuntime,
+  pluginRuntime: PluginRuntime,
   switchModel: (modelId: string) => Promise<string>,
   version: string,
   initialPrompt?: string
@@ -388,7 +396,19 @@ function runTUI(
         hooksInfo: () => hookRuntime.status(),
         trustHooks: async () => {
           await hookRuntime.trustProject();
+          // hookRuntime re-registers hook scripts (clearing the hook system);
+          // re-activate plugins afterwards so their hooks survive.
+          await pluginRuntime.activate();
           return `Project hooks trusted. ${hookRuntime.getScripts().filter(s => s.trusted).length} hook(s) active.`;
+        },
+        pluginsInfo: () => pluginRuntime.status(),
+        trustPlugins: async () => {
+          await pluginRuntime.trustProject();
+          return `Project plugins trusted. ${pluginRuntime.getLoadedNames().length} plugin(s) active.`;
+        },
+        reloadPlugins: async () => {
+          await pluginRuntime.activate();
+          return `Plugins reloaded. ${pluginRuntime.getLoadedNames().length} plugin(s) active.`;
         },
         switchModel,
         version,

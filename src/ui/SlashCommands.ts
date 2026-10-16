@@ -24,6 +24,7 @@ export const SLASH_COMMANDS: SlashCommandEntry[] = [
   { name: '/copy', description: "Copy the last response to clipboard", args: '[N]' },
   { name: '/feedback', description: 'Submit feedback about WardayaCode' },
   { name: '/hooks', description: 'View hook configurations for tool events' },
+  { name: '/plugins', description: 'Manage plugins (list, trust, reload)' },
   { name: '/memory', description: 'Edit Wardaya memory files' },
   { name: '/anw', description: 'Ask a quick side question without interrupting the main conversation' },
   { name: '/effort', description: 'Set effort level for model usage', args: '<level>' },
@@ -118,6 +119,12 @@ export interface SlashCommandContext {
   getHooksInfo: () => Promise<string>;
   /** Trust the current project's hooks and activate them. */
   trustHooks: () => Promise<string>;
+  /** Human-readable plugin status. */
+  getPluginsInfo: () => Promise<string>;
+  /** Trust the current project's plugins and activate them. */
+  trustPlugins: () => Promise<string>;
+  /** Re-discover and reload plugins. */
+  reloadPlugins: () => Promise<string>;
   /** Enable or disable the sandbox. */
   setSandboxEnabled: (enabled: boolean) => void;
   /** Get sandbox enabled state. */
@@ -326,6 +333,16 @@ export async function handleSlashCommand(
         return { handled: true, output: await ctx.trustHooks() };
       }
       return { handled: true, output: await ctx.getHooksInfo() };
+    }
+
+    case '/plugins': {
+      if (arg === 'trust') {
+        return { handled: true, output: await ctx.trustPlugins() };
+      }
+      if (arg === 'reload') {
+        return { handled: true, output: await ctx.reloadPlugins() };
+      }
+      return { handled: true, output: await ctx.getPluginsInfo() };
     }
 
     case '/memory': {
