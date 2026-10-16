@@ -121,7 +121,9 @@ gh pr create --base main --title "release: v0.2.0"
 
 # after merging into main, create the GitHub release (triggers npm publish)
 git checkout main && git pull origin main
-gh release create v0.2.0 --generate-notes
+# NOTE: the repo's default branch is `develop`, so `gh release create` must be
+# told to tag `main` — otherwise it tags develop and publishes the wrong version.
+gh release create v0.2.0 --target main --generate-notes
 
 # merge release branch back into develop
 gh pr create --base develop --head release/0.2.0 --title "chore: merge release/0.2.0 back into develop"
@@ -139,7 +141,7 @@ git push origin hotfix/0.1.5
 
 # PR into main → merge → release → publish
 gh pr create --base main --title "fix: critical bug"
-gh release create v0.1.5 --generate-notes
+gh release create v0.1.5 --target main --generate-notes
 
 # also merge back into develop
 gh pr create --base develop --head hotfix/0.1.5 --title "chore: merge hotfix/0.1.5 into develop"
